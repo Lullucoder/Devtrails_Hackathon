@@ -138,11 +138,11 @@ export default function WorkerDashboard() {
       >
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm text-muted-foreground">Protected This Week</span>
-          <TrendingUp className="w-4 h-4 text-accent" />
+          <TrendingUp className="w-4 h-4 text-foreground" />
         </div>
         <div className="flex items-baseline gap-1">
-          <IndianRupee className="w-5 h-5 text-accent" />
-          <span className="text-2xl font-bold text-accent">1,250</span>
+          <IndianRupee className="w-5 h-5 text-foreground" />
+          <span className="text-2xl font-bold text-foreground">1,250</span>
         </div>
         <p className="text-xs text-muted-foreground mt-1">2 claims auto-approved</p>
       </motion.div>
@@ -170,7 +170,7 @@ export default function WorkerDashboard() {
                 <p className="text-xs text-muted-foreground">{claim.date}</p>
               </div>
               <div className="text-right">
-                <p className="font-semibold text-sm text-accent">+₹{claim.amount}</p>
+                <p className="font-semibold text-sm text-foreground">+₹{claim.amount}</p>
                 <span
                   className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${statusClass[claim.status]}`}
                 >

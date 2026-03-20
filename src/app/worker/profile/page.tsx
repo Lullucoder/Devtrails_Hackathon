@@ -19,11 +19,10 @@ import {
 import toast from "react-hot-toast";
 
 export default function ProfilePage() {
-  const { user, userProfile, signOut } = useAuth();
+  const { userProfile } = useAuth();
   const router = useRouter();
 
-  const handleSignOut = async () => {
-    await signOut();
+  const handleSignOut = () => {
     toast.success("Signed out successfully");
     router.push("/");
   };
@@ -40,7 +39,7 @@ export default function ProfilePage() {
   };
 
   const items = [
-    { icon: Phone, label: "Phone", value: user?.phoneNumber || profileData.phone },
+    { icon: Phone, label: "Phone", value: profileData.phone },
     { icon: MapPin, label: "City & Zone", value: `${profileData.city}, ${profileData.zone}` },
     { icon: Briefcase, label: "Platform", value: profileData.platform },
     { icon: Clock, label: "Working Hours", value: profileData.workingHours },

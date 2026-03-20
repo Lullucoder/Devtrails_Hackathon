@@ -88,7 +88,7 @@ const CustomXAxisTick = ({ x, y, payload }: any) => {
 
 export default function AdminDashboard() {
   return (
-    <div className="p-6 lg:p-8 ml-64 min-h-screen bg-background text-foreground">
+    <div className="p-6 lg:p-8 min-h-screen bg-background text-foreground">
       {/* Search Header - matching reference UI top bar */}
       <div className="flex justify-between items-center mb-8">
         <div className="relative w-96">
