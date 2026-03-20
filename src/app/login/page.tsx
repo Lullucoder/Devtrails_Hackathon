@@ -3,12 +3,16 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Shield, Phone, KeyRound, ArrowRight, Loader2 } from "lucide-react";
+import { Shield, Phone, KeyRound, ArrowRight, Loader2, HardHat, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import toast from "react-hot-toast";
 
+type Step = "role" | "phone" | "otp";
+type Role = "worker" | "admin";
+
 export default function LoginPage() {
-  const [step, setStep] = useState<"phone" | "otp">("phone");
+  const [step, setStep] = useState<Step>("role");
+  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [loading, setLoading] = useState(false);
@@ -16,9 +20,9 @@ export default function LoginPage() {
   const { user, userProfile, sendOTP, verifyOTP, setupRecaptcha, loading: authLoading } = useAuth();
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
   const recaptchaRef = useRef<HTMLDivElement>(null);
-  // Tracks whether we've already initialized reCAPTCHA for this mount
   const hasSetupRecaptcha = useRef(false);
 
+  // Redirect if already logged in
   useEffect(() => {
     if (!authLoading && user) {
       if (userProfile?.isOnboarded) {
@@ -30,18 +34,22 @@ export default function LoginPage() {
     }
   }, [user, userProfile, authLoading, router]);
 
+  // Setup reCAPTCHA only once when phone step is shown
   useEffect(() => {
-    // Only setup once when the phone step is shown and the container is mounted
     if (step === "phone" && recaptchaRef.current && !hasSetupRecaptcha.current) {
       hasSetupRecaptcha.current = true;
       setupRecaptcha("recaptcha-container");
     }
-    // Reset the guard when moving away from the phone step so it can re-init if needed
     if (step !== "phone") {
       hasSetupRecaptcha.current = false;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step]); // intentionally omit setupRecaptcha — it's stable via useCallback
+  }, [step]);
+
+  const handleRoleSelect = (role: Role) => {
+    setSelectedRole(role);
+    setStep("phone");
+  };
 
   const handleSendOTP = async () => {
     if (phone.length < 10) {
@@ -71,6 +79,12 @@ export default function LoginPage() {
     try {
       await verifyOTP(code);
       toast.success("Verified successfully!");
+      // Redirect based on selected role
+      if (selectedRole === "admin") {
+        router.push("/admin/dashboard");
+      } else {
+        router.push("/worker/dashboard");
+      }
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : "Invalid OTP";
       toast.error(errorMessage);
@@ -80,15 +94,11 @@ export default function LoginPage() {
   };
 
   const handleOtpChange = (index: number, value: string) => {
-    if (value.length > 1) {
-      value = value.slice(-1);
-    }
+    if (value.length > 1) value = value.slice(-1);
     if (!/^\d*$/.test(value)) return;
-
     const newOtp = [...otp];
     newOtp[index] = value;
     setOtp(newOtp);
-
     if (value && index < 5) {
       otpRefs.current[index + 1]?.focus();
     }
@@ -98,6 +108,12 @@ export default function LoginPage() {
     if (e.key === "Backspace" && !otp[index] && index > 0) {
       otpRefs.current[index - 1]?.focus();
     }
+  };
+
+  const getSubtitle = () => {
+    if (step === "role") return "Choose how you want to sign in";
+    if (step === "phone") return `Signing in as ${selectedRole === "admin" ? "Admin" : "Worker"} — enter your phone number`;
+    return "Enter the 6-digit OTP sent to your phone";
   };
 
   if (authLoading) {
@@ -110,6 +126,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen animated-gradient flex items-center justify-center px-4 relative overflow-hidden">
+      {/* Background blobs */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute top-1/3 left-1/4 w-80 h-80 bg-[#6c5ce7] rounded-full opacity-10 blur-[100px]" />
         <div className="absolute bottom-1/3 right-1/4 w-80 h-80 bg-[#ec4899] rounded-full opacity-10 blur-[100px]" />
@@ -123,7 +140,7 @@ export default function LoginPage() {
       >
         <div className="glass rounded-3xl p-8 sm:p-10">
           {/* Logo */}
-          <div className="flex justify-center mb-8">
+          <div className="flex justify-center mb-6">
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#6c5ce7] to-[#ec4899] flex items-center justify-center animate-float">
               <Shield className="w-9 h-9 text-white" />
             </div>
@@ -136,20 +153,81 @@ export default function LoginPage() {
             Welcome to <span className="gradient-text">RoziRakshak</span>
           </h1>
           <p className="text-center text-muted-foreground text-sm mb-8">
-            {step === "phone"
-              ? "Enter your phone number to get started"
-              : "Enter the 6-digit OTP sent to your phone"}
+            {getSubtitle()}
           </p>
 
           <AnimatePresence mode="wait">
-            {step === "phone" ? (
+
+            {/* ── STEP 1: Role Selection ── */}
+            {step === "role" && (
               <motion.div
-                key="phone"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
+                key="role"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.3 }}
               >
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Worker Card */}
+                  <button
+                    id="worker-login-btn"
+                    onClick={() => handleRoleSelect("worker")}
+                    className="group flex flex-col items-center gap-3 p-6 rounded-2xl border border-border bg-muted hover:border-[#6c5ce7] hover:bg-[#6c5ce7]/10 transition-all duration-300 cursor-pointer"
+                  >
+                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-[#6c5ce7] to-[#a855f7] flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                      <HardHat className="w-7 h-7 text-white" />
+                    </div>
+                    <div className="text-center">
+                      <p className="font-semibold text-foreground text-sm">Worker</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Field access</p>
+                    </div>
+                  </button>
+
+                  {/* Admin Card */}
+                  <button
+                    id="admin-login-btn"
+                    onClick={() => handleRoleSelect("admin")}
+                    className="group flex flex-col items-center gap-3 p-6 rounded-2xl border border-border bg-muted hover:border-[#ec4899] hover:bg-[#ec4899]/10 transition-all duration-300 cursor-pointer"
+                  >
+                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-[#ec4899] to-[#f43f5e] flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                      <ShieldCheck className="w-7 h-7 text-white" />
+                    </div>
+                    <div className="text-center">
+                      <p className="font-semibold text-foreground text-sm">Admin</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Full control</p>
+                    </div>
+                  </button>
+                </div>
+
+                {/* Role badge hint */}
+                <p className="text-center text-xs text-muted-foreground mt-6">
+                  Select your role to continue with phone verification
+                </p>
+              </motion.div>
+            )}
+
+            {/* ── STEP 2: Phone Number ── */}
+            {step === "phone" && (
+              <motion.div
+                key="phone"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                {/* Selected role indicator */}
+                <div className={`flex items-center gap-2 mb-5 px-3 py-2 rounded-xl text-sm font-medium w-fit mx-auto
+                  ${selectedRole === "admin"
+                    ? "bg-[#ec4899]/10 text-[#ec4899] border border-[#ec4899]/30"
+                    : "bg-[#6c5ce7]/10 text-[#6c5ce7] border border-[#6c5ce7]/30"
+                  }`}>
+                  {selectedRole === "admin"
+                    ? <ShieldCheck className="w-4 h-4" />
+                    : <HardHat className="w-4 h-4" />
+                  }
+                  {selectedRole === "admin" ? "Admin Login" : "Worker Login"}
+                </div>
+
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-muted-foreground mb-2">
                     Phone Number
@@ -187,13 +265,27 @@ export default function LoginPage() {
                 </button>
 
                 <div id="recaptcha-container" ref={recaptchaRef} className="mt-4" />
+
+                <button
+                  onClick={() => {
+                    setStep("role");
+                    setPhone("");
+                    setSelectedRole(null);
+                  }}
+                  className="w-full mt-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  ← Change Role
+                </button>
               </motion.div>
-            ) : (
+            )}
+
+            {/* ── STEP 3: OTP Verification ── */}
+            {step === "otp" && (
               <motion.div
                 key="otp"
-                initial={{ opacity: 0, x: -20 }}
+                initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
+                exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.3 }}
               >
                 <div className="mb-6">
@@ -249,6 +341,7 @@ export default function LoginPage() {
                 </button>
               </motion.div>
             )}
+
           </AnimatePresence>
         </div>
       </motion.div>
