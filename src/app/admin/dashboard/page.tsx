@@ -2,16 +2,12 @@
 
 import React from "react";
 import { motion } from "framer-motion";
+import { Users, Shield, FileText, AlertTriangle, CloudRain, Thermometer, Wind, MapPin, Wifi } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+
 import {
-  Users,
-  FileText,
-  IndianRupee,
-  Shield,
-  TrendingUp,
-  AlertTriangle,
-  MapPin,
-} from "lucide-react";
-import {
+  AreaChart,
+  Area,
   BarChart,
   Bar,
   XAxis,
@@ -19,246 +15,249 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
+  ReferenceLine,
   Cell,
 } from "recharts";
 
+// Mock Data adapted for RoziRakshak but visually matching reference
 const stats = [
-  { label: "Active Workers", value: "1,247", icon: Users, color: "#6c5ce7", change: "+12%" },
-  { label: "Active Policies", value: "892", icon: Shield, color: "#a855f7", change: "+8%" },
-  { label: "Claims This Week", value: "156", icon: FileText, color: "#3b82f6", change: "+23%" },
-  { label: "Payout Volume", value: "₹89,400", icon: IndianRupee, color: "#10b981", change: "+15%" },
+  { label: "Total Workers", value: "39,569", trend: "+5% than last week", icon: Users },
+  { label: "Active Policies", value: "78,096", trend: "+5% than last week", icon: Shield },
+  { label: "Claims Processed", value: "3,50,820", trend: "+5% than last week", icon: FileText },
+  { label: "Fraud Alerts", value: "4,528", trend: "-50% than last month", icon: AlertTriangle },
 ];
 
-const claimsByTrigger = [
-  { type: "Rain", count: 52, color: "#3b82f6" },
-  { type: "Heat", count: 38, color: "#f97316" },
-  { type: "AQI", count: 31, color: "#8b5cf6" },
-  { type: "Zone", count: 19, color: "#ef4444" },
-  { type: "Platform", count: 16, color: "#06b6d4" },
+const weeklyData = [
+  { day: "M", volume: 150000 },
+  { day: "T", volume: 380000 },
+  { day: "W", volume: 220000 },
+  { day: "T", volume: 290000 },
+  { day: "F", volume: 450000, isPeak: true },
+  { day: "S", volume: 280000 },
+  { day: "S", volume: 550000 },
 ];
 
-const weeklyTrends = [
-  { week: "W1", claims: 89, payouts: 45200, lossRatio: 0.62 },
-  { week: "W2", claims: 112, payouts: 58900, lossRatio: 0.68 },
-  { week: "W3", claims: 98, payouts: 51300, lossRatio: 0.59 },
-  { week: "W4", claims: 134, payouts: 72100, lossRatio: 0.71 },
-  { week: "W5", claims: 156, payouts: 89400, lossRatio: 0.74 },
-  { week: "W6", claims: 143, payouts: 78600, lossRatio: 0.67 },
+const triggerDistribution = [
+  { type: "Rain", count: 85, emoji: "🌧️" },
+  { type: "Heat", count: 42, emoji: "☀️" },
+  { type: "AQI", count: 65, emoji: "😷" },
+  { type: "Zone", count: 28, emoji: "🚧" },
+  { type: "Platform", count: 18, emoji: "📱" },
+  { type: "Other", count: 12, emoji: "⚠️" },
+  { type: "Traffic", count: 35, emoji: "🚗" },
 ];
 
-const cityStats = [
-  { city: "Bengaluru", workers: 412, risk: 72 },
-  { city: "Delhi", workers: 356, risk: 85 },
-  { city: "Mumbai", workers: 289, risk: 78 },
-  { city: "Hyderabad", workers: 124, risk: 55 },
-  { city: "Chennai", workers: 42, risk: 61 },
-  { city: "Pune", workers: 24, risk: 48 },
+const recentActivity = [
+  { id: 1, text: "Auto-approved claim for 'Arjun K.'", time: "11:12 AM", trigger: "Rain" },
+  { id: 2, text: "Fraud alert triggered for 'Suresh P.'", time: "10:45 AM", trigger: "GPS Mismatch" },
+  { id: 3, text: "New policy core plan purchased", time: "09:30 AM", trigger: "Purchase" },
 ];
 
-const COLORS = ["#3b82f6", "#f97316", "#8b5cf6", "#ef4444", "#06b6d4"];
-
-const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; name: string }>; label?: string }) => {
+const CustomAreaTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
     return (
-      <div className="glass rounded-lg p-3 text-xs">
-        <p className="font-semibold mb-1">{label}</p>
-        {payload.map((item, index) => (
-          <p key={index} className="text-muted-foreground">
-            {item.name}: <span className="text-foreground font-medium">{item.value}</span>
-          </p>
-        ))}
+      <div className="bg-primary/90 text-primary-foreground px-3 py-1.5 rounded-full text-xs font-bold neon-glow">
+        {payload[0].value.toLocaleString()}
       </div>
     );
   }
   return null;
 };
 
+// Customized dot for the active Reference Line
+const ActiveDot = (props: any) => {
+  const { cx, cy, payload } = props;
+  if (payload.isPeak) {
+    return (
+      <circle cx={cx} cy={cy} r={6} fill="#ec4899" stroke="#fff" strokeWidth={2} className="animate-pulse" />
+    );
+  }
+  return null;
+};
+
+const CustomXAxisTick = ({ x, y, payload }: any) => {
+  const emoji = triggerDistribution.find((d) => d.type === payload.value)?.emoji;
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text x={0} y={0} dy={16} textAnchor="middle" fill="#8b8d9b" className="text-lg">
+        {emoji}
+      </text>
+    </g>
+  );
+};
+
 export default function AdminDashboard() {
   return (
-    <div className="p-6 lg:p-8">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-outfit)" }}>
-          Admin <span className="gradient-text">Dashboard</span>
-        </h1>
-        <p className="text-sm text-muted-foreground">Portfolio overview and risk intelligence</p>
+    <div className="p-6 lg:p-8 ml-64 min-h-screen bg-background text-foreground">
+      {/* Search Header - matching reference UI top bar */}
+      <div className="flex justify-between items-center mb-8">
+        <div className="relative w-96">
+          <input
+            type="text"
+            placeholder="Search here..."
+            className="w-full bg-card border border-border rounded-full pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary transition-all text-muted-foreground placeholder:text-muted-foreground"
+          />
+          <svg className="w-4 h-4 absolute left-4 top-3 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+        </div>
+        <div className="flex items-center gap-4">
+          <span className="text-xs font-semibold text-muted-foreground">Eng (US)</span>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-card rounded-full flex items-center justify-center border border-border">
+              <span className="w-2 h-2 bg-destructive rounded-full"></span>
+            </div>
+            <img src="https://i.pravatar.cc/150?u=a042581f4e29026024d" alt="Profile" className="w-9 h-9 rounded-full border border-border" />
+          </div>
+        </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {stats.map((stat, i) => (
+      {/* Top Stat Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        {stats.map((stat, index) => (
           <motion.div
             key={stat.label}
-            className="glass rounded-2xl p-5"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.08 }}
+            transition={{ delay: index * 0.1 }}
           >
-            <div className="flex items-center justify-between mb-3">
-              <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center"
-                style={{ backgroundColor: `${stat.color}20` }}
-              >
-                <stat.icon className="w-5 h-5" style={{ color: stat.color }} />
-              </div>
-              <span className="text-xs font-semibold text-accent flex items-center gap-1">
-                <TrendingUp className="w-3 h-3" />
-                {stat.change}
-              </span>
-            </div>
-            <p className="text-2xl font-bold">{stat.value}</p>
-            <p className="text-xs text-muted-foreground">{stat.label}</p>
+            <Card className="bg-card border-none shadow-lg">
+              <CardContent className="p-6 flex items-center justify-between">
+                <div>
+                  <h3 className="text-2xl font-bold tracking-tight mb-1">{stat.value}</h3>
+                  <p className="text-sm font-medium mb-1">{stat.label}</p>
+                  <p className="text-[10px] text-muted-foreground">{stat.trend}</p>
+                </div>
+                {/* Glowing Icon Box based on reference */}
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center icon-glow-box">
+                  <stat.icon className="w-5 h-5 text-primary" />
+                </div>
+              </CardContent>
+            </Card>
           </motion.div>
         ))}
       </div>
 
       {/* Charts Row */}
-      <div className="grid lg:grid-cols-2 gap-6 mb-8">
-        {/* Claims by Trigger */}
-        <motion.div
-          className="glass rounded-2xl p-5"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-        >
-          <h3 className="text-sm font-semibold mb-4">Claims by Trigger Type</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={claimsByTrigger}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#2a2a3a" />
-              <XAxis dataKey="type" stroke="#888899" fontSize={12} />
-              <YAxis stroke="#888899" fontSize={12} />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="count" radius={[6, 6, 0, 0]}>
-                {claimsByTrigger.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
+        {/* Weekly Trend (Area Chart) */}
+        <motion.div className="lg:col-span-3" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+          <Card className="bg-card border-none shadow-lg h-full">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div>
+                <CardTitle className="text-base font-semibold">Weekly Payout Volume</CardTitle>
+                <CardDescription className="text-xs">Visualize claim consumption trend</CardDescription>
+              </div>
+              <select className="bg-background border border-border text-xs rounded-md px-2 py-1 text-muted-foreground">
+                <option>Last month</option>
+                <option>This week</option>
+              </select>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[250px] w-full mt-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={weeklyData} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorVolume" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#2d2e3f" />
+                    <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#8b8d9b' }} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#8b8d9b' }} tickFormatter={(val) => `${val / 1000}k`} />
+                    <Tooltip content={<CustomAreaTooltip />} cursor={{ stroke: 'transparent' }} />
+                    <ReferenceLine x="F" stroke="#8b5cf6" strokeDasharray="3 3" />
+                    <Area type="monotone" dataKey="volume" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorVolume)" activeDot={<ActiveDot />} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
         </motion.div>
 
-        {/* Weekly Trends */}
-        <motion.div
-          className="glass rounded-2xl p-5"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35 }}
-        >
-          <h3 className="text-sm font-semibold mb-4">Weekly Claims & Loss Ratio</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={weeklyTrends}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#2a2a3a" />
-              <XAxis dataKey="week" stroke="#888899" fontSize={12} />
-              <YAxis yAxisId="left" stroke="#888899" fontSize={12} />
-              <YAxis yAxisId="right" orientation="right" stroke="#888899" fontSize={12} />
-              <Tooltip content={<CustomTooltip />} />
-              <Line yAxisId="left" type="monotone" dataKey="claims" stroke="#6c5ce7" strokeWidth={2} dot={{ fill: "#6c5ce7", r: 4 }} name="Claims" />
-              <Line yAxisId="right" type="monotone" dataKey="lossRatio" stroke="#f59e0b" strokeWidth={2} dot={{ fill: "#f59e0b", r: 4 }} name="Loss Ratio" />
-            </LineChart>
-          </ResponsiveContainer>
+        {/* Trigger Distribution (Bar Chart) */}
+        <motion.div className="lg:col-span-2" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+          <Card className="bg-card border-none shadow-lg h-full">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold">Trigger Distribution</CardTitle>
+              <CardDescription className="text-xs">Understand external failure causes</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[250px] w-full mt-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={triggerDistribution} margin={{ top: 0, right: 0, left: 0, bottom: 20 }} barSize={16}>
+                    <defs>
+                      <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#c77dff" />
+                        <stop offset="100%" stopColor="#8b5cf6" />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#2d2e3f" />
+                    <XAxis dataKey="type" axisLine={false} tickLine={false} tick={<CustomXAxisTick />} />
+                    <Tooltip cursor={{ fill: '#2d2e3f', opacity: 0.4 }} contentStyle={{ backgroundColor: '#1c1d29', borderColor: '#2d2e3f', borderRadius: '8px' }} />
+                    <Bar dataKey="count" fill="url(#barGradient)" radius={[8, 8, 8, 8]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
         </motion.div>
       </div>
 
       {/* Bottom Row */}
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* Trigger Distribution */}
-        <motion.div
-          className="glass rounded-2xl p-5"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          <h3 className="text-sm font-semibold mb-4">Trigger Distribution</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie
-                data={claimsByTrigger}
-                cx="50%"
-                cy="50%"
-                innerRadius={50}
-                outerRadius={80}
-                dataKey="count"
-                nameKey="type"
-              >
-                {claimsByTrigger.map((_, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Risk Zones Data Map visual equivalent */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+          <Card className="bg-card border-none shadow-lg h-full">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base font-semibold">Top Risk Zones Today</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {[
+                  { zone: "Koramangala, BLR", count: 3860, icon: CloudRain, color: "text-blue-400", bg: "bg-blue-400/10" },
+                  { zone: "Connaught Place, DEL", count: 2150, icon: Thermometer, color: "text-orange-400", bg: "bg-orange-400/10" },
+                  { zone: "Anand Vihar, DEL", count: 1180, icon: Wind, color: "text-purple-400", bg: "bg-purple-400/10" },
+                  { zone: "Andheri, MUM", count: 980, icon: MapPin, color: "text-red-400", bg: "bg-red-400/10" },
+                ].map((item, i) => (
+                  <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-background border border-border">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${item.bg}`}>
+                        <item.icon className={`w-4 h-4 ${item.color}`} />
+                      </div>
+                      <span className="text-sm font-medium">{item.zone}</span>
+                    </div>
+                    <span className="text-sm font-bold">{item.count.toLocaleString()}</span>
+                  </div>
                 ))}
-              </Pie>
-              <Tooltip content={<CustomTooltip />} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="flex flex-wrap gap-3 mt-2 justify-center">
-            {claimsByTrigger.map((item) => (
-              <div key={item.type} className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
-                {item.type}
               </div>
-            ))}
-          </div>
+            </CardContent>
+          </Card>
         </motion.div>
 
-        {/* City Risk */}
-        <motion.div
-          className="glass rounded-2xl p-5 lg:col-span-2"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.45 }}
-        >
-          <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-primary" />
-            City Risk Overview
-          </h3>
-          <div className="space-y-3">
-            {cityStats.map((city) => (
-              <div key={city.city} className="flex items-center gap-3">
-                <span className="text-sm font-medium w-24">{city.city}</span>
-                <div className="flex-1 h-3 rounded-full bg-muted overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{
-                      width: `${city.risk}%`,
-                      background: city.risk > 75
-                        ? "linear-gradient(90deg, #ef4444, #f97316)"
-                        : city.risk > 55
-                        ? "linear-gradient(90deg, #f59e0b, #f97316)"
-                        : "linear-gradient(90deg, #10b981, #059669)",
-                    }}
-                  />
-                </div>
-                <div className="flex items-center gap-3 text-xs text-muted-foreground w-32 justify-end">
-                  <span>{city.workers} workers</span>
-                  <span
-                    className={`font-semibold ${
-                      city.risk > 75
-                        ? "text-destructive"
-                        : city.risk > 55
-                        ? "text-warning"
-                        : "text-accent"
-                    }`}
-                  >
-                    {city.risk}%
-                  </span>
-                </div>
+        {/* Activity Log */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
+          <Card className="bg-card border-none shadow-lg h-full">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base font-semibold">Recent Activity Log</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                {recentActivity.map((activity, i) => (
+                  <div key={i} className="flex items-start justify-between relative pl-4 border-l-2 border-border">
+                    <div className="absolute -left-1.5 top-0 w-3 h-3 rounded-full bg-primary border-4 border-card"></div>
+                    <div className="flex items-start gap-4">
+                      <img src={`https://i.pravatar.cc/150?u=${activity.id}`} alt="User" className="w-8 h-8 rounded-full border border-border" />
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{activity.text}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">System Event · {activity.trigger}</p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-semibold text-muted-foreground">{activity.time}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-
-          {/* AI Forecast */}
-          <div className="mt-6 p-4 rounded-xl bg-[rgba(108,92,231,0.1)] border border-[rgba(108,92,231,0.2)]">
-            <div className="flex items-center gap-2 mb-2">
-              <AlertTriangle className="w-4 h-4 text-warning" />
-              <span className="text-sm font-semibold">AI Forecast — Next Week</span>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Predicted claims surge in <strong className="text-foreground">Delhi</strong> (+32%) due to
-              forecasted heat wave. Recommend increasing risk pool allocation for Delhi zones by 15%.
-              Expected payout volume: <strong className="text-foreground">₹1,12,000</strong>.
-            </p>
-          </div>
+            </CardContent>
+          </Card>
         </motion.div>
       </div>
     </div>

@@ -1,86 +1,76 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
-  FileText,
-  AlertTriangle,
   Users,
+  MessageSquare,
   Shield,
-  ChevronLeft,
-  ChevronRight,
+  Activity,
+  Sliders
 } from "lucide-react";
 
+// Adjusted Nav Items to match the vibe while keeping functionality
 const navItems = [
   { href: "/admin/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/admin/claims", icon: FileText, label: "Claims" },
-  { href: "/admin/fraud", icon: AlertTriangle, label: "Fraud Alerts" },
-  { href: "/admin/users", icon: Users, label: "Workers" },
+  { href: "/admin/users", icon: Users, label: "Worker Management" },
+  { href: "/admin/claims", icon: MessageSquare, label: "Claim Sessions" },
+  { href: "/admin/fraud", icon: Shield, label: "Fraud Monitoring" },
+  { href: "#", icon: Activity, label: "Trigger Analytics" },
+  { href: "#", icon: Sliders, label: "Settings & Limits" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <div className="min-h-screen bg-background flex">
-      {/* Sidebar */}
-      <aside
-        className={`fixed left-0 top-0 h-full glass border-r border-border z-50 flex flex-col transition-all duration-300 ${
-          collapsed ? "w-16" : "w-56"
-        }`}
-      >
-        {/* Logo */}
-        <div className="p-4 flex items-center gap-2 border-b border-border">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#6c5ce7] to-[#ec4899] flex items-center justify-center flex-shrink-0">
-            <Shield className="w-4 h-4 text-white" />
+    <div className="min-h-screen bg-background flex text-foreground">
+      {/* Sidebar - Matching reference UI exactly */}
+      <aside className="fixed left-0 top-0 h-full w-64 bg-sidebar border-r border-sidebar-border z-50 flex flex-col py-6 px-4">
+        
+        {/* Logo Area */}
+        <div className="flex flex-col items-center mb-8 pb-6 border-b border-sidebar-border/50">
+          <div className="w-16 h-16 rounded-3xl bg-primary/20 flex items-center justify-center mb-3 neon-glow border border-primary/30">
+            <Shield className="w-8 h-8 text-primary drop-shadow-[0_0_8px_rgba(139,92,246,0.8)]" />
           </div>
-          {!collapsed && (
-            <span className="text-sm font-bold whitespace-nowrap" style={{ fontFamily: "var(--font-outfit)" }}>
-              RoziRakshak <span className="text-primary-light">AI</span>
-            </span>
-          )}
+          <span className="text-sm font-bold tracking-wider" style={{ fontFamily: "var(--font-outfit)" }}>
+            RoziRakshak <span className="text-primary">AI</span>
+          </span>
         </div>
 
-        {/* Nav Items */}
-        <nav className="flex-1 p-2 space-y-1">
+        {/* Navigation */}
+        <nav className="flex-1 space-y-2">
           {navItems.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive = pathname === item.href || (item.href !== "#" && pathname.startsWith(item.href) && item.href !== "/admin/dashboard");
             return (
               <Link
-                key={item.href}
+                key={item.label}
                 href={item.href}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                className={`flex items-center gap-4 px-4 py-3 rounded-2xl text-[13px] font-medium transition-all ${
                   isActive
-                    ? "bg-gradient-to-r from-[rgba(108,92,231,0.2)] to-[rgba(168,85,247,0.1)] text-primary-light"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                    ? "bg-primary text-primary-foreground shadow-[0_0_15px_rgba(139,92,246,0.5)]"
+                    : "text-muted-foreground hover:text-foreground hover:bg-card"
                 }`}
               >
-                <item.icon className={`w-5 h-5 flex-shrink-0 ${isActive ? "text-primary" : ""}`} />
-                {!collapsed && <span>{item.label}</span>}
+                <item.icon className={`w-4 h-4 flex-shrink-0 ${isActive ? "text-primary-foreground" : ""}`} />
+                <span>{item.label}</span>
               </Link>
             );
           })}
         </nav>
-
-        {/* Collapse Toggle */}
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="p-3 border-t border-border flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-        >
-          {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-        </button>
       </aside>
 
-      {/* Main */}
-      <main
-        className={`flex-1 transition-all duration-300 ${
-          collapsed ? "ml-16" : "ml-56"
-        }`}
-      >
-        {children}
+      {/* Main Content Area */}
+      <main className="flex-1 w-full bg-background relative overflow-hidden">
+        {/* Decorative background glows */}
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
+        <div className="absolute bottom-0 left-64 w-[500px] h-[500px] bg-[#f72585]/5 rounded-full blur-[120px] pointer-events-none" />
+        
+        <div className="relative z-10 w-full h-full">
+          {children}
+        </div>
       </main>
     </div>
   );
