@@ -1,0 +1,262 @@
+{
+  "triggers": [
+    {
+      "id": "tr_001",
+      "type": "heavy_rain",
+      "severity": "severe",
+      "zone": "Koramangala",
+      "city": "Bengaluru",
+      "startTime": "2026-03-18T14:00:00",
+      "endTime": "2026-03-18T20:00:00",
+      "details": "Heavy rainfall exceeding 65mm/hr in zone. Red alert issued by IMD.",
+      "affectedWorkers": 47
+    },
+    {
+      "id": "tr_002",
+      "type": "extreme_heat",
+      "severity": "high",
+      "zone": "Connaught Place",
+      "city": "Delhi",
+      "startTime": "2026-03-17T11:00:00",
+      "endTime": "2026-03-17T16:00:00",
+      "details": "Heat index crossed 45°C during peak delivery hours.",
+      "affectedWorkers": 82
+    },
+    {
+      "id": "tr_003",
+      "type": "hazardous_aqi",
+      "severity": "severe",
+      "zone": "Anand Vihar",
+      "city": "Delhi",
+      "startTime": "2026-03-15T06:00:00",
+      "endTime": "2026-03-15T23:00:00",
+      "details": "AQI sustained above 400 for 12+ hours. Outdoor activity unsafe.",
+      "affectedWorkers": 124
+    },
+    {
+      "id": "tr_004",
+      "type": "zone_closure",
+      "severity": "moderate",
+      "zone": "Bandra West",
+      "city": "Mumbai",
+      "startTime": "2026-03-16T09:00:00",
+      "endTime": "2026-03-16T15:00:00",
+      "details": "Zone access restricted due to waterlogging. Delivery routes blocked.",
+      "affectedWorkers": 31
+    },
+    {
+      "id": "tr_005",
+      "type": "platform_outage",
+      "severity": "high",
+      "zone": "All Zones",
+      "city": "Bengaluru",
+      "startTime": "2026-03-19T18:00:00",
+      "endTime": "2026-03-19T21:30:00",
+      "details": "Platform-wide order system disruption. Order volume dropped 90%.",
+      "affectedWorkers": 210
+    }
+  ],
+  "claims": [
+    {
+      "id": "cl_001",
+      "workerId": "w_001",
+      "workerName": "Arjun K.",
+      "policyId": "pol_001",
+      "triggerType": "heavy_rain",
+      "triggerSeverity": "severe",
+      "status": "auto_approved",
+      "confidenceScore": 0.92,
+      "payoutAmount": 750,
+      "createdAt": "2026-03-18T20:15:00",
+      "resolvedAt": "2026-03-18T20:16:00",
+      "description": "Severe rainfall in Koramangala zone. 6-hour work window lost."
+    },
+    {
+      "id": "cl_002",
+      "workerId": "w_002",
+      "workerName": "Priya S.",
+      "policyId": "pol_002",
+      "triggerType": "extreme_heat",
+      "triggerSeverity": "high",
+      "status": "approved",
+      "confidenceScore": 0.68,
+      "payoutAmount": 450,
+      "createdAt": "2026-03-17T16:30:00",
+      "resolvedAt": "2026-03-17T17:45:00",
+      "description": "Heat stress in Connaught Place. 4-hour afternoon window affected."
+    },
+    {
+      "id": "cl_003",
+      "workerId": "w_003",
+      "workerName": "Rahul M.",
+      "policyId": "pol_003",
+      "triggerType": "hazardous_aqi",
+      "triggerSeverity": "severe",
+      "status": "under_review",
+      "confidenceScore": 0.55,
+      "payoutAmount": 900,
+      "createdAt": "2026-03-15T23:30:00",
+      "description": "Hazardous AQI in Anand Vihar. Full-day income disruption claimed."
+    },
+    {
+      "id": "cl_004",
+      "workerId": "w_004",
+      "workerName": "Deepak V.",
+      "policyId": "pol_004",
+      "triggerType": "platform_outage",
+      "triggerSeverity": "high",
+      "status": "auto_approved",
+      "confidenceScore": 0.95,
+      "payoutAmount": 500,
+      "createdAt": "2026-03-19T21:45:00",
+      "resolvedAt": "2026-03-19T21:46:00",
+      "description": "Platform outage during peak evening hours. 3.5 hours lost."
+    },
+    {
+      "id": "cl_005",
+      "workerId": "w_005",
+      "workerName": "Suresh P.",
+      "policyId": "pol_005",
+      "triggerType": "heavy_rain",
+      "triggerSeverity": "moderate",
+      "status": "held",
+      "confidenceScore": 0.32,
+      "payoutAmount": 0,
+      "createdAt": "2026-03-18T20:30:00",
+      "description": "Rain claim filed but GPS signals show home WiFi. Under investigation."
+    }
+  ],
+  "analytics": {
+    "activeUsers": 1247,
+    "activePolicies": 892,
+    "claimsThisWeek": 156,
+    "payoutVolume": 89400,
+    "claimsByTrigger": [
+      { "type": "Heavy Rain", "count": 52 },
+      { "type": "Extreme Heat", "count": 38 },
+      { "type": "Hazardous AQI", "count": 31 },
+      { "type": "Zone Closure", "count": 19 },
+      { "type": "Platform Outage", "count": 16 }
+    ],
+    "weeklyTrends": [
+      { "week": "W1", "claims": 89, "payouts": 45200, "lossRatio": 0.62 },
+      { "week": "W2", "claims": 112, "payouts": 58900, "lossRatio": 0.68 },
+      { "week": "W3", "claims": 98, "payouts": 51300, "lossRatio": 0.59 },
+      { "week": "W4", "claims": 134, "payouts": 72100, "lossRatio": 0.71 },
+      { "week": "W5", "claims": 156, "payouts": 89400, "lossRatio": 0.74 },
+      { "week": "W6", "claims": 143, "payouts": 78600, "lossRatio": 0.67 }
+    ],
+    "cityStats": [
+      { "city": "Bengaluru", "workers": 412, "risk": 0.72 },
+      { "city": "Delhi", "workers": 356, "risk": 0.85 },
+      { "city": "Mumbai", "workers": 289, "risk": 0.78 },
+      { "city": "Hyderabad", "workers": 124, "risk": 0.55 },
+      { "city": "Chennai", "workers": 42, "risk": 0.61 },
+      { "city": "Pune", "workers": 24, "risk": 0.48 }
+    ]
+  },
+  "fraudSignals": [
+    {
+      "id": "fs_001",
+      "workerId": "w_005",
+      "workerName": "Suresh P.",
+      "claimId": "cl_005",
+      "signalType": "GPS-WiFi Mismatch",
+      "severity": "high",
+      "details": "GPS reports Koramangala zone but device connected to home WiFi (Jayanagar). Cell tower registration inconsistent with claimed location.",
+      "createdAt": "2026-03-18T20:32:00",
+      "status": "investigating"
+    },
+    {
+      "id": "fs_002",
+      "workerId": "w_006",
+      "workerName": "Vikram T.",
+      "claimId": "cl_006",
+      "signalType": "Impossible Speed",
+      "severity": "critical",
+      "details": "Worker GPS showed transit from HSR Layout to Whitefield (28km) in 4 minutes. Speed: 420 km/h. GPS teleportation detected.",
+      "createdAt": "2026-03-19T14:20:00",
+      "status": "open"
+    },
+    {
+      "id": "fs_003",
+      "workerId": "w_007",
+      "workerName": "Amit G.",
+      "claimId": "cl_007",
+      "signalType": "Device Fingerprint Collision",
+      "severity": "medium",
+      "details": "Same device fingerprint found across 3 worker accounts (w_007, w_012, w_018). Possible syndicate activity.",
+      "createdAt": "2026-03-17T09:15:00",
+      "status": "investigating"
+    },
+    {
+      "id": "fs_004",
+      "workerId": "w_008",
+      "workerName": "Ravi K.",
+      "claimId": "cl_008",
+      "signalType": "Emulator Detected",
+      "severity": "critical",
+      "details": "Claim submitted from Android emulator. Device model reports as 'sdk_gphone64_x86_64'. No physical device.",
+      "createdAt": "2026-03-19T22:00:00",
+      "status": "open"
+    }
+  ],
+  "workers": [
+    {
+      "uid": "w_001",
+      "name": "Arjun K.",
+      "phone": "+919876543210",
+      "city": "Bengaluru",
+      "platform": "Zepto",
+      "zone": "Koramangala",
+      "workingHours": "morning",
+      "weeklyEarningRange": "₹4,500–₹6,000",
+      "trustScore": 0.91,
+      "activePlan": "core",
+      "claimsCount": 3,
+      "joinedDate": "2026-01-15"
+    },
+    {
+      "uid": "w_002",
+      "name": "Priya S.",
+      "phone": "+919876543211",
+      "city": "Delhi",
+      "platform": "Blinkit",
+      "zone": "Connaught Place",
+      "workingHours": "afternoon",
+      "weeklyEarningRange": "₹6,000–₹8,000",
+      "trustScore": 0.85,
+      "activePlan": "peak",
+      "claimsCount": 2,
+      "joinedDate": "2026-02-01"
+    },
+    {
+      "uid": "w_003",
+      "name": "Rahul M.",
+      "phone": "+919876543212",
+      "city": "Delhi",
+      "platform": "Instamart",
+      "zone": "Anand Vihar",
+      "workingHours": "full_day",
+      "weeklyEarningRange": "₹6,000–₹8,000",
+      "trustScore": 0.72,
+      "activePlan": "core",
+      "claimsCount": 5,
+      "joinedDate": "2026-01-20"
+    },
+    {
+      "uid": "w_004",
+      "name": "Deepak V.",
+      "phone": "+919876543213",
+      "city": "Bengaluru",
+      "platform": "BigBasket Now",
+      "zone": "Indiranagar",
+      "workingHours": "evening",
+      "weeklyEarningRange": "₹4,500–₹6,000",
+      "trustScore": 0.88,
+      "activePlan": "lite",
+      "claimsCount": 1,
+      "joinedDate": "2026-02-10"
+    }
+  ]
+}
