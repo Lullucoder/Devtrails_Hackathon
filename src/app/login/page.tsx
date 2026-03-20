@@ -4,7 +4,6 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Shield, Phone, KeyRound, ArrowRight, Loader2, HardHat, ShieldCheck } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
 import toast from "react-hot-toast";
 
 type Step = "role" | "phone" | "otp";
@@ -17,34 +16,7 @@ export default function LoginPage() {
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { user, userProfile, sendOTP, verifyOTP, setupRecaptcha, loading: authLoading } = useAuth();
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const recaptchaRef = useRef<HTMLDivElement>(null);
-  const hasSetupRecaptcha = useRef(false);
-
-  // Redirect if already logged in
-  useEffect(() => {
-    if (!authLoading && user) {
-      if (userProfile?.isOnboarded) {
-        const route = userProfile.role === "admin" ? "/admin/dashboard" : "/worker/dashboard";
-        router.push(route);
-      } else {
-        router.push("/onboarding");
-      }
-    }
-  }, [user, userProfile, authLoading, router]);
-
-  // Setup reCAPTCHA only once when phone step is shown
-  useEffect(() => {
-    if (step === "phone" && recaptchaRef.current && !hasSetupRecaptcha.current) {
-      hasSetupRecaptcha.current = true;
-      setupRecaptcha("recaptcha-container");
-    }
-    if (step !== "phone") {
-      hasSetupRecaptcha.current = false;
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step]);
 
   const handleRoleSelect = (role: Role) => {
     setSelectedRole(role);
@@ -58,12 +30,12 @@ export default function LoginPage() {
     }
     setLoading(true);
     try {
-      await sendOTP(phone);
+      // Simulate OTP send (demo mode)
+      await new Promise((res) => setTimeout(res, 800));
       setStep("otp");
       toast.success("OTP sent successfully!");
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to send OTP";
-      toast.error(errorMessage);
+    } catch {
+      toast.error("Failed to send OTP");
     } finally {
       setLoading(false);
     }
@@ -77,17 +49,16 @@ export default function LoginPage() {
     }
     setLoading(true);
     try {
-      await verifyOTP(code);
+      // Simulate OTP verify (demo mode)
+      await new Promise((res) => setTimeout(res, 800));
       toast.success("Verified successfully!");
-      // Redirect based on selected role
       if (selectedRole === "admin") {
         router.push("/admin/dashboard");
       } else {
         router.push("/worker/dashboard");
       }
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Invalid OTP";
-      toast.error(errorMessage);
+    } catch {
+      toast.error("Invalid OTP");
     } finally {
       setLoading(false);
     }
@@ -112,17 +83,10 @@ export default function LoginPage() {
 
   const getSubtitle = () => {
     if (step === "role") return "Choose how you want to sign in";
-    if (step === "phone") return `Signing in as ${selectedRole === "admin" ? "Admin" : "Worker"} — enter your phone number`;
+    if (step === "phone")
+      return `Signing in as ${selectedRole === "admin" ? "Admin" : "Worker"} — enter your phone number`;
     return "Enter the 6-digit OTP sent to your phone";
   };
-
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen animated-gradient flex items-center justify-center px-4 relative overflow-hidden">
@@ -199,7 +163,6 @@ export default function LoginPage() {
                   </button>
                 </div>
 
-                {/* Role badge hint */}
                 <p className="text-center text-xs text-muted-foreground mt-6">
                   Select your role to continue with phone verification
                 </p>
@@ -216,11 +179,13 @@ export default function LoginPage() {
                 transition={{ duration: 0.3 }}
               >
                 {/* Selected role indicator */}
-                <div className={`flex items-center gap-2 mb-5 px-3 py-2 rounded-xl text-sm font-medium w-fit mx-auto
-                  ${selectedRole === "admin"
-                    ? "bg-[#ec4899]/10 text-[#ec4899] border border-[#ec4899]/30"
-                    : "bg-[#6c5ce7]/10 text-[#6c5ce7] border border-[#6c5ce7]/30"
-                  }`}>
+                <div
+                  className={`flex items-center gap-2 mb-5 px-3 py-2 rounded-xl text-sm font-medium w-fit mx-auto ${
+                    selectedRole === "admin"
+                      ? "bg-[#ec4899]/10 text-[#ec4899] border border-[#ec4899]/30"
+                      : "bg-[#6c5ce7]/10 text-[#6c5ce7] border border-[#6c5ce7]/30"
+                  }`}
+                >
                   {selectedRole === "admin"
                     ? <ShieldCheck className="w-4 h-4" />
                     : <HardHat className="w-4 h-4" />
@@ -257,14 +222,9 @@ export default function LoginPage() {
                   {loading ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
                   ) : (
-                    <>
-                      Send OTP
-                      <ArrowRight className="w-5 h-5" />
-                    </>
+                    <>Send OTP <ArrowRight className="w-5 h-5" /></>
                   )}
                 </button>
-
-                <div id="recaptcha-container" ref={recaptchaRef} className="mt-4" />
 
                 <button
                   onClick={() => {
@@ -323,10 +283,7 @@ export default function LoginPage() {
                   {loading ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
                   ) : (
-                    <>
-                      Verify & Continue
-                      <ArrowRight className="w-5 h-5" />
-                    </>
+                    <>Verify & Continue <ArrowRight className="w-5 h-5" /></>
                   )}
                 </button>
 
