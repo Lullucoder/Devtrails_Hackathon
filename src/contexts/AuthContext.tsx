@@ -1,67 +1,41 @@
 "use client";
 
-import React, { createContext, useContext } from "react";
+import React, { createContext, useContext, useState } from "react";
 import { WorkerProfile } from "@/types";
-
-// Mock user object (no Firebase)
-const mockUser = {
-  uid: "demo-user-001",
-  phoneNumber: "+919876543210",
-  email: "arjun@gmail.com",
-  displayName: "Arjun K.",
-};
-
-const mockProfile: WorkerProfile = {
-  uid: "demo-user-001",
-  phone: "+919876543210",
-  name: "Arjun K.",
-  city: "Bengaluru",
-  platform: "Zepto",
-  zone: "Koramangala",
-  workingHours: "morning",
-  weeklyEarningRange: "₹6,000–₹8,000",
-  upiId: "arjun@upi",
-  role: "worker",
-  isOnboarded: true,
-  trustScore: 0.91,
-  createdAt: "2026-03-01T10:00:00.000Z",
-};
-
-interface MockUser {
-  uid: string;
-  phoneNumber: string;
-  email: string;
-  displayName: string;
-}
+import { MOCK_USERS, MOCK_PROFILES, MockUser } from "@/lib/mockDb";
 
 interface AuthContextType {
   user: MockUser | null;
   userProfile: WorkerProfile | null;
   loading: boolean;
-  signOut: () => Promise<void>;
+  login: (role: "worker" | "admin") => void;
+  signOut: () => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
-  user: mockUser,
-  userProfile: mockProfile,
+  user: null,
+  userProfile: null,
   loading: false,
-  signOut: async () => {},
+  login: () => {},
+  signOut: () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const signOut = async () => {
-    // No-op for demo
+  const [user, setUser] = useState<MockUser | null>(null);
+  const [userProfile, setUserProfile] = useState<WorkerProfile | null>(null);
+
+  const login = (role: "worker" | "admin") => {
+    setUser(MOCK_USERS[role]);
+    setUserProfile(MOCK_PROFILES[role]);
+  };
+
+  const signOut = () => {
+    setUser(null);
+    setUserProfile(null);
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user: mockUser,
-        userProfile: mockProfile,
-        loading: false,
-        signOut,
-      }}
-    >
+    <AuthContext.Provider value={{ user, userProfile, loading: false, login, signOut }}>
       {children}
     </AuthContext.Provider>
   );

@@ -79,7 +79,7 @@ export default function LandingPage() {
             </span>
           </div>
           <Link
-            href="/login"
+            href="/worker/dashboard"
             className="px-5 py-2.5 rounded-full bg-gradient-to-r from-[#6c5ce7] to-[#a855f7] text-white text-sm font-semibold hover:opacity-90 transition-opacity"
           >
             Get Started
@@ -136,7 +136,7 @@ export default function LandingPage() {
             transition={{ duration: 0.7, delay: 0.3 }}
           >
             <Link
-              href="/login"
+              href="/worker/dashboard"
               id="hero-cta"
               className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-full bg-gradient-to-r from-[#6c5ce7] to-[#a855f7] text-white font-semibold text-lg hover:opacity-90 transition-all pulse-glow"
             >
@@ -344,7 +344,7 @@ export default function LandingPage() {
                   </div>
                 </div>
                 <Link
-                  href="/login"
+                  href="/worker/dashboard"
                   className={`block text-center py-3 rounded-xl font-semibold transition-all ${
                     plan.popular
                       ? "bg-gradient-to-r from-[#6c5ce7] to-[#a855f7] text-white hover:opacity-90"
@@ -377,7 +377,7 @@ export default function LandingPage() {
             to external disruptions again.
           </p>
           <Link
-            href="/login"
+            href="/worker/dashboard"
             className="inline-flex items-center gap-2 px-10 py-4 rounded-full bg-white text-[#0a0a12] font-bold text-lg hover:bg-gray-100 transition-colors"
           >
             Start in 2 Minutes
