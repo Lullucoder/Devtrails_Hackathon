@@ -16,6 +16,8 @@ export default function LoginPage() {
   const { user, userProfile, sendOTP, verifyOTP, setupRecaptcha, loading: authLoading } = useAuth();
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
   const recaptchaRef = useRef<HTMLDivElement>(null);
+  // Tracks whether we've already initialized reCAPTCHA for this mount
+  const hasSetupRecaptcha = useRef(false);
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -29,10 +31,17 @@ export default function LoginPage() {
   }, [user, userProfile, authLoading, router]);
 
   useEffect(() => {
-    if (step === "phone" && recaptchaRef.current) {
+    // Only setup once when the phone step is shown and the container is mounted
+    if (step === "phone" && recaptchaRef.current && !hasSetupRecaptcha.current) {
+      hasSetupRecaptcha.current = true;
       setupRecaptcha("recaptcha-container");
     }
-  }, [step, setupRecaptcha]);
+    // Reset the guard when moving away from the phone step so it can re-init if needed
+    if (step !== "phone") {
+      hasSetupRecaptcha.current = false;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]); // intentionally omit setupRecaptcha — it's stable via useCallback
 
   const handleSendOTP = async () => {
     if (phone.length < 10) {

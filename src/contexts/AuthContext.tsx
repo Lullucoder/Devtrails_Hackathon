@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import {
   User,
   RecaptchaVerifier,
@@ -9,7 +9,7 @@ import {
   signOut as firebaseSignOut,
   onAuthStateChanged,
 } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { WorkerProfile } from "@/types";
 
@@ -43,9 +43,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [confirmationResult, setConfirmationResult] =
     useState<ConfirmationResult | null>(null);
-  const [recaptchaVerifier, setRecaptchaVerifier] =
-    useState<RecaptchaVerifier | null>(null);
   const [recaptchaReady, setRecaptchaReady] = useState(false);
+
+  // Use a ref to hold the verifier — avoids stale closure issues and
+  // prevents the object from triggering re-renders when it changes.
+  const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -71,11 +73,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  const setupRecaptcha = (elementId: string) => {
+  // useCallback gives a stable function reference so it won't cause
+  // infinite loops when used in a useEffect dependency array.
+  const setupRecaptcha = useCallback((elementId: string) => {
     try {
-      if (recaptchaVerifier) {
-        recaptchaVerifier.clear();
+      // Clear any existing verifier before creating a new one
+      if (recaptchaVerifierRef.current) {
+        recaptchaVerifierRef.current.clear();
+        recaptchaVerifierRef.current = null;
+        setRecaptchaReady(false);
       }
+
+      const container = document.getElementById(elementId);
+      if (!container) return;
+
+      // Guard: if reCAPTCHA widget is already rendered inside this element, skip
+      if (container.childElementCount > 0) {
+        setRecaptchaReady(true);
+        return;
+      }
+
       const verifier = new RecaptchaVerifier(auth, elementId, {
         size: "invisible",
         callback: () => {
@@ -85,17 +102,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setRecaptchaReady(false);
         },
       });
-      setRecaptchaVerifier(verifier);
+
+      recaptchaVerifierRef.current = verifier;
+
       verifier.render().then(() => {
         setRecaptchaReady(true);
+      }).catch((err) => {
+        console.error("reCAPTCHA render error:", err);
       });
     } catch (error) {
       console.error("reCAPTCHA setup error:", error);
     }
-  };
+  }, []); // stable — no dependencies needed since we use a ref
 
   const sendOTP = async (phoneNumber: string) => {
-    if (!recaptchaVerifier) {
+    if (!recaptchaVerifierRef.current) {
       throw new Error("reCAPTCHA not initialized");
     }
     const formattedPhone = phoneNumber.startsWith("+91")
@@ -104,7 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const result = await signInWithPhoneNumber(
       auth,
       formattedPhone,
-      recaptchaVerifier
+      recaptchaVerifierRef.current
     );
     setConfirmationResult(result);
   };
@@ -116,7 +137,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const userCredential = await confirmationResult.confirm(code);
     setUser(userCredential.user);
 
-    // Check if profile exists
     const docRef = doc(db, "workers", userCredential.user.uid);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
@@ -125,10 +145,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    // Clean up reCAPTCHA on sign out
+    if (recaptchaVerifierRef.current) {
+      recaptchaVerifierRef.current.clear();
+      recaptchaVerifierRef.current = null;
+    }
     await firebaseSignOut(auth);
     setUser(null);
     setUserProfile(null);
     setConfirmationResult(null);
+    setRecaptchaReady(false);
   };
 
   return (
