@@ -15,6 +15,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
+import toast from "react-hot-toast";
 
 const triggers = [
   { icon: CloudRain, label: "Rain", status: "active", color: "#3b82f6" },
@@ -68,7 +69,10 @@ export default function WorkerDashboard() {
             Arjun 👋
           </h1>
         </div>
-        <button className="w-10 h-10 rounded-full bg-muted flex items-center justify-center relative">
+        <button
+          onClick={() => toast("🔔 Cover expiring in 3 days — renew now!", { icon: "📢" })}
+          className="w-10 h-10 rounded-full bg-muted flex items-center justify-center relative hover:bg-muted/80 transition-colors"
+        >
           <Bell className="w-5 h-5 text-muted-foreground" />
           <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-destructive border-2 border-background" />
         </button>

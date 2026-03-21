@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { Search, MapPin, Star, Shield, ChevronRight } from "lucide-react";
+import toast from "react-hot-toast";
 
 const workers = [
   {
@@ -133,7 +134,10 @@ export default function UsersPage() {
 
             <div className="flex items-center justify-between pt-3 border-t border-border">
               <p className="text-[10px] text-muted-foreground">Joined: {worker.joined}</p>
-              <button className="text-xs text-primary font-semibold flex items-center gap-1 hover:underline">
+              <button
+                onClick={() => toast(`Viewing ${worker.name}'s profile`, { icon: "👤" })}
+                className="text-xs text-primary font-semibold flex items-center gap-1 hover:underline"
+              >
                 Details <ChevronRight className="w-3 h-3" />
               </button>
             </div>

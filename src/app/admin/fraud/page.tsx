@@ -11,6 +11,7 @@ import {
   Shield,
   ChevronRight,
 } from "lucide-react";
+import toast from "react-hot-toast";
 
 const fraudAlerts = [
   {
@@ -144,11 +145,17 @@ export default function FraudPage() {
                   </div>
                   <p className="text-xs text-muted-foreground mt-2">{alert.details}</p>
                   <div className="flex items-center gap-2 mt-3">
-                    <button className="text-xs text-primary font-semibold flex items-center gap-1 hover:underline">
+                    <button
+                      onClick={() => toast.success(`Investigation started for ${alert.worker}`)}
+                      className="text-xs text-primary font-semibold flex items-center gap-1 hover:underline"
+                    >
                       <Shield className="w-3.5 h-3.5" />
                       Investigate
                     </button>
-                    <button className="text-xs text-muted-foreground flex items-center gap-1 hover:text-foreground">
+                    <button
+                      onClick={() => toast(`Viewing claim details for ${alert.worker}`, { icon: "📋" })}
+                      className="text-xs text-muted-foreground flex items-center gap-1 hover:text-foreground"
+                    >
                       View Claim
                       <ChevronRight className="w-3 h-3" />
                     </button>

@@ -115,7 +115,10 @@ export default function ProfilePage() {
 
       {/* Actions */}
       <div className="space-y-2">
-        <button className="w-full glass rounded-xl p-4 flex items-center gap-3 hover:bg-muted transition-colors">
+        <button
+          onClick={() => toast.success("₹1,250 received this week — 2 auto-approved claims")}
+          className="w-full glass rounded-xl p-4 flex items-center gap-3 hover:bg-muted transition-colors"
+        >
           <Shield className="w-5 h-5 text-primary" />
           <span className="text-sm font-medium flex-1 text-left">Payout History</span>
           <ChevronRight className="w-4 h-4 text-muted-foreground" />

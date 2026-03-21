@@ -16,14 +16,13 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 
-// Adjusted Nav Items to match the vibe while keeping functionality
 const navItems = [
   { href: "/admin/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/admin/users", icon: Users, label: "Worker Management" },
   { href: "/admin/claims", icon: MessageSquare, label: "Claim Sessions" },
   { href: "/admin/fraud", icon: Shield, label: "Fraud Monitoring" },
-  { href: "#", icon: Activity, label: "Trigger Analytics" },
-  { href: "#", icon: Sliders, label: "Settings & Limits" },
+  { href: "/admin/triggers", icon: Activity, label: "Trigger Analytics" },
+  { href: "/admin/settings", icon: Sliders, label: "Settings & Limits" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -38,7 +37,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="min-h-screen bg-background flex text-foreground">
-      {/* Sidebar - Matching reference UI exactly */}
+      {/* Sidebar */}
       <aside 
         className={`fixed left-0 top-0 h-full bg-sidebar border-r border-sidebar-border z-50 flex flex-col py-6 ${isCollapsed ? 'w-20 px-2' : 'w-64 px-4'} transition-all duration-300`}
       >
@@ -58,25 +57,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {/* Navigation */}
         <nav className="flex-1 space-y-2 overflow-y-auto no-scrollbar">
           {navItems.map((item) => {
-            const isActive = pathname === item.href || (item.href !== "#" && pathname.startsWith(item.href) && item.href !== "/admin/dashboard");
-            const isDisabled = item.href === "#";
-
-            if (isDisabled) {
-              return (
-                <button
-                  key={item.label}
-                  onClick={() => toast("Coming soon! 🚧", { icon: "⏳" })}
-                  className={`flex items-center gap-4 rounded-2xl text-[13px] font-medium transition-all group w-full ${
-                    isCollapsed ? 'justify-center p-3' : 'px-4 py-3'
-                  } text-muted-foreground hover:text-foreground hover:bg-card`}
-                  title={isCollapsed ? item.label : undefined}
-                >
-                  <item.icon className="w-5 h-5 flex-shrink-0" />
-                  {!isCollapsed && <span className="whitespace-nowrap">{item.label}</span>}
-                </button>
-              );
-            }
-
+            const isActive = pathname === item.href || (pathname.startsWith(item.href) && item.href !== "/admin/dashboard");
             return (
               <Link
                 key={item.label}
