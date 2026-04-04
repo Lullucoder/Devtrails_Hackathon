@@ -11,12 +11,13 @@ import {
   CheckCircle2,
   ArrowRight,
   ArrowLeft,
-  Loader2,
   ChevronDown,
 } from "lucide-react";
 import { serverTimestamp } from "firebase/firestore";
 import { AadhaarVerification } from "@/components/onboarding/AadhaarVerification";
 import type { AadhaarVerificationResult } from "@/components/onboarding/AadhaarVerification";
+import { FaceVerificationStep } from "@/components/onboarding/FaceVerificationStep";
+import type { FaceVerificationResult } from "@/components/onboarding/FaceVerificationStep";
 import { createWorker } from "@/lib/firestore";
 import toast from "react-hot-toast";
 
@@ -340,170 +341,7 @@ function WorkStep({
   );
 }
 
-// ─── Screen 4: Face Verification (mock) ──────────────────────────────────────
 
-function FaceStep({
-  done, onCapture, onNext, onBack,
-}: {
-  done: boolean; onCapture: () => void; onNext: () => void; onBack: () => void;
-}) {
-  const [capturing, setCapturing] = useState(false);
-
-  function handleCapture() {
-    setCapturing(true);
-    setTimeout(() => {
-      setCapturing(false);
-      onCapture();
-    }, 2200);
-  }
-
-  return (
-    <motion.div
-      key="face"
-      className="w-full max-w-md"
-      initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }}
-      transition={{ duration: 0.3 }}
-    >
-      <div className="glass rounded-2xl p-6">
-        <h2 className="text-lg font-bold text-foreground mb-1">Face Verification</h2>
-        <p className="text-sm text-muted-foreground mb-6">
-          Take a quick selfie to confirm your identity. This is a one-time step.
-        </p>
-
-        {/* Camera frame */}
-        <div
-          className="relative mx-auto mb-6 rounded-2xl overflow-hidden"
-          style={{
-            width: "100%",
-            maxWidth: 280,
-            aspectRatio: "3/4",
-            background: "var(--muted)",
-            border: done
-              ? "2px solid #217346"
-              : "2px dashed var(--border)",
-          }}
-        >
-          {done ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3"
-              style={{ background: "rgba(33,115,70,0.08)" }}>
-              <motion.div
-                initial={{ scale: 0 }} animate={{ scale: 1 }}
-                transition={{ type: "spring", stiffness: 260, damping: 20 }}
-              >
-                <CheckCircle2 className="w-16 h-16" style={{ color: "#217346" }} />
-              </motion.div>
-              <p className="text-sm font-semibold" style={{ color: "#217346" }}>Face captured!</p>
-            </div>
-          ) : capturing ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-              {/* Scanning animation */}
-              <div className="relative w-24 h-24">
-                <div className="absolute inset-0 rounded-full border-4 border-primary/30" />
-                <motion.div
-                  className="absolute inset-0 rounded-full border-4 border-primary"
-                  style={{ borderTopColor: "transparent" }}
-                  animate={{ rotate: 360 }}
-                  transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-                />
-                <Camera className="absolute inset-0 m-auto w-10 h-10 text-primary" />
-              </div>
-              <p className="text-xs text-muted-foreground font-medium">Scanning face…</p>
-              {/* Scan line */}
-              <motion.div
-                className="absolute left-0 right-0 h-0.5"
-                style={{ background: "linear-gradient(90deg, transparent, var(--primary), transparent)" }}
-                animate={{ top: ["20%", "80%", "20%"] }}
-                transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
-              />
-            </div>
-          ) : (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-              {/* Face silhouette */}
-              <svg width="80" height="100" viewBox="0 0 80 100" fill="none"
-                className="opacity-20">
-                <ellipse cx="40" cy="38" rx="28" ry="34" stroke="var(--foreground)" strokeWidth="2"/>
-                <path d="M15 90 Q40 70 65 90" stroke="var(--foreground)" strokeWidth="2"/>
-              </svg>
-              <p className="text-xs text-muted-foreground text-center px-4">
-                Position your face in the frame
-              </p>
-            </div>
-          )}
-
-          {/* Corner guides */}
-          {!done && !capturing && (
-            <>
-              {[
-                { top: "8px", left: "8px", borderTop: "2px solid var(--primary)", borderLeft: "2px solid var(--primary)" },
-                { top: "8px", right: "8px", borderTop: "2px solid var(--primary)", borderRight: "2px solid var(--primary)" },
-                { bottom: "8px", left: "8px", borderBottom: "2px solid var(--primary)", borderLeft: "2px solid var(--primary)" },
-                { bottom: "8px", right: "8px", borderBottom: "2px solid var(--primary)", borderRight: "2px solid var(--primary)" },
-              ].map((style, i) => (
-                <div key={i} className="absolute w-5 h-5" style={style} />
-              ))}
-            </>
-          )}
-        </div>
-
-        {/* Instructions */}
-        <div
-          className="rounded-xl p-3 mb-5 text-xs text-muted-foreground"
-          style={{ background: "var(--muted)", border: "1px solid var(--border)" }}
-        >
-          <p className="font-semibold text-foreground mb-1">📍 Tips for a clear scan:</p>
-          <ul className="space-y-0.5 list-disc pl-4">
-            <li>Good lighting, face forward</li>
-            <li>Remove sunglasses or mask</li>
-            <li>Hold still for 2 seconds</li>
-          </ul>
-        </div>
-
-        <div className="flex gap-3">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground bg-muted hover:bg-muted/80 transition-all"
-          >
-            <ArrowLeft className="w-4 h-4" /> Back
-          </button>
-
-          {!done ? (
-            <button
-              id="capture-face-btn"
-              disabled={capturing}
-              onClick={handleCapture}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white transition-all"
-              style={{
-                background: "linear-gradient(135deg, var(--gradient-start), var(--gradient-mid))",
-              }}
-            >
-              {capturing ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> Capturing…</>
-              ) : (
-                <><Camera className="w-4 h-4" /> Capture Selfie</>
-              )}
-            </button>
-          ) : (
-            <button
-              id="face-next-btn"
-              onClick={onNext}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white transition-all"
-              style={{
-                background: "linear-gradient(135deg, #217346 0%, #2a9356 100%)",
-                boxShadow: "0 4px 16px rgba(33,115,70,0.35)",
-              }}
-            >
-              Complete Setup <ArrowRight className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-
-        <p className="text-center text-[10px] text-muted-foreground mt-4">
-          Face data is not stored. Used only for one-time identity confirmation.
-        </p>
-      </div>
-    </motion.div>
-  );
-}
 
 // ─── Screen 5: Submitting ─────────────────────────────────────────────────────
 
@@ -556,8 +394,11 @@ export default function OnboardingPage() {
   const [work, setWork]         = useState<WorkDetails>({
     zone: "", workingHours: "morning", weeklyEarningRange: "", upiId: "",
   });
-  const [faceDone, setFaceDone] = useState(false);
+  const [faceResult, setFaceResult] = useState<FaceVerificationResult | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+
+  // Deterministic demo uid — in production, read from the authenticated session
+  const workerUid = `worker-${Date.now()}`;
 
   const handleAadhaarSuccess = useCallback((result: AadhaarVerificationResult) => {
     setAadhaarResult(result);
@@ -569,7 +410,13 @@ export default function OnboardingPage() {
     setStep("personal");
   }, []);
 
-  async function handleFinalSubmit() {
+  const handleFaceVerified = useCallback((result: FaceVerificationResult) => {
+    setFaceResult(result);
+    handleFinalSubmit(result);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aadhaarResult, personal, work]);
+
+  async function handleFinalSubmit(face: FaceVerificationResult) {
     setStep("submitting");
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -584,7 +431,7 @@ export default function OnboardingPage() {
       }
 
       await createWorker({
-        uid:                `worker-${Date.now()}`,
+        uid:                workerUid,
         phone:              "",
         name:               personal.name,
         city:               personal.city,
@@ -595,11 +442,17 @@ export default function OnboardingPage() {
         upiId:              work.upiId,
         role:               "worker",
         isOnboarded:        true,
-        trustScore:         aadhaarResult?.verified ? 0.80 : 0.70,
+        trustScore:         aadhaarResult?.verified ? 0.85 : 0.75,
         activePlan:         null,
         claimsCount:        0,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         joinedDate:         serverTimestamp() as any,
+        // ── Face liveness fields ──
+        face_verified:        true,
+        face_image_r2_key:    face.r2Key,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        face_verified_at:     serverTimestamp() as any,
+        liveness_check_passed: true,
         ...kycFields,
       });
 
@@ -667,11 +520,10 @@ export default function OnboardingPage() {
         )}
 
         {step === "face" && (
-          <FaceStep
+          <FaceVerificationStep
             key="face"
-            done={faceDone}
-            onCapture={() => setFaceDone(true)}
-            onNext={handleFinalSubmit}
+            workerUid={workerUid}
+            onVerified={handleFaceVerified}
             onBack={() => setStep("work")}
           />
         )}

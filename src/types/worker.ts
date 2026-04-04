@@ -81,4 +81,18 @@ export interface WorkerProfile extends BaseDocument {
 
   /** Which KYC method was used. */
   kyc_method?: "digilocker_mock";
+
+  // ─── Face Liveness / Photo ─────────────────────────────────────────────────
+
+  /** Whether the real-time liveness check was passed during onboarding. */
+  face_verified?: boolean;
+
+  /** R2 object key for the captured face photo, e.g. "faces/{uid}.jpg". */
+  face_image_r2_key?: string;
+
+  /** Timestamp when liveness check was completed. */
+  face_verified_at?: FirestoreTimestamp;
+
+  /** Whether the MediaPipe liveness check (look, blink, turn) was passed. */
+  liveness_check_passed?: boolean;
 }

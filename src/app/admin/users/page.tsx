@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
-import { motion } from "framer-motion";
-import { Search, MapPin, Star, Shield, ChevronRight, ShieldCheck, ShieldX } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Search, MapPin, Star, Shield, ChevronRight, ShieldCheck, ShieldX, ScanFace, X, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
+
 
 const DL_GREEN = "#217346";
 
@@ -18,38 +19,39 @@ interface Worker {
   claims: number;
   joined: string;
   aadhaar_verified: boolean;
+  face_verified: boolean;
 }
 
 const workers: Worker[] = [
   {
     uid: "w_001", name: "Arjun K.", city: "Bengaluru", zone: "Koramangala",
     platform: "Zepto", trustScore: 0.91, plan: "Core", claims: 3,
-    joined: "15 Jan 2026", aadhaar_verified: true,
+    joined: "15 Jan 2026", aadhaar_verified: true, face_verified: true,
   },
   {
     uid: "w_002", name: "Priya S.", city: "Delhi", zone: "Connaught Place",
     platform: "Blinkit", trustScore: 0.85, plan: "Peak", claims: 2,
-    joined: "01 Feb 2026", aadhaar_verified: true,
+    joined: "01 Feb 2026", aadhaar_verified: true, face_verified: true,
   },
   {
     uid: "w_003", name: "Rahul M.", city: "Delhi", zone: "Anand Vihar",
     platform: "Instamart", trustScore: 0.72, plan: "Core", claims: 5,
-    joined: "20 Jan 2026", aadhaar_verified: false,
+    joined: "20 Jan 2026", aadhaar_verified: false, face_verified: false,
   },
   {
     uid: "w_004", name: "Deepak V.", city: "Bengaluru", zone: "Indiranagar",
     platform: "BigBasket Now", trustScore: 0.88, plan: "Lite", claims: 1,
-    joined: "10 Feb 2026", aadhaar_verified: true,
+    joined: "10 Feb 2026", aadhaar_verified: true, face_verified: true,
   },
   {
     uid: "w_005", name: "Suresh P.", city: "Bengaluru", zone: "HSR Layout",
     platform: "Zepto", trustScore: 0.45, plan: "Core", claims: 7,
-    joined: "25 Jan 2026", aadhaar_verified: false,
+    joined: "25 Jan 2026", aadhaar_verified: false, face_verified: false,
   },
   {
     uid: "w_006", name: "Meena R.", city: "Mumbai", zone: "Bandra West",
     platform: "Blinkit", trustScore: 0.93, plan: "Peak", claims: 1,
-    joined: "05 Feb 2026", aadhaar_verified: true,
+    joined: "05 Feb 2026", aadhaar_verified: true, face_verified: true,
   },
 ];
 
@@ -82,6 +84,143 @@ function KycBadge({ verified }: { verified: boolean }) {
       <ShieldX className="w-3 h-3" />
       Unverified
     </div>
+  );
+}
+
+// ─── Face Photo Modal ─────────────────────────────────────────────────────────
+
+function FacePhotoModal({ uid, onClose }: { uid: string; onClose: () => void }) {
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState(false);
+
+  React.useEffect(() => {
+    // Fetch a presigned GET URL from the admin API route (same endpoint, GET method)
+    fetch(`/api/upload/face?uid=${encodeURIComponent(uid)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.presignedUrl) setPhotoUrl(data.presignedUrl);
+        else setError(true);
+      })
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  }, [uid]);
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        style={{ background: "rgba(0,0,0,0.65)" }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+      >
+        <motion.div
+          className="relative rounded-2xl overflow-hidden"
+          style={{
+            background: "var(--card)",
+            border: "1px solid var(--border)",
+            maxWidth: 360,
+            width: "100%",
+          }}
+          initial={{ scale: 0.88, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.88, opacity: 0 }}
+          transition={{ type: "spring", stiffness: 260, damping: 22 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div
+            className="flex items-center justify-between px-5 py-3.5"
+            style={{ borderBottom: "1px solid var(--border)" }}
+          >
+            <div className="flex items-center gap-2">
+              <ScanFace className="w-4 h-4" style={{ color: DL_GREEN }} />
+              <span className="text-sm font-semibold">Face Photo</span>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Close"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Photo area */}
+          <div
+            className="flex items-center justify-center"
+            style={{ minHeight: 280, background: "var(--muted)" }}
+          >
+            {loading && (
+              <Loader2 className="w-8 h-8 text-muted-foreground animate-spin" />
+            )}
+            {!loading && error && (
+              <p className="text-sm text-muted-foreground text-center px-8">
+                Photo not available or R2 credentials not configured.
+              </p>
+            )}
+            {!loading && photoUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={photoUrl}
+                alt="Worker face photo"
+                className="w-full object-cover"
+                style={{ maxHeight: 360 }}
+                onError={() => setError(true)}
+              />
+            )}
+          </div>
+
+          <div className="px-5 py-3 text-[10px] text-muted-foreground">
+            Liveness-verified face photo · Stored in Cloudflare R2
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+// ─── Face Badge (clickable) ───────────────────────────────────────────────────
+
+function FaceBadge({ uid, verified }: { uid: string; verified: boolean }) {
+  const [open, setOpen] = useState(false);
+
+  if (!verified) {
+    return (
+      <div
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold"
+        style={{
+          background: "rgba(239,68,68,0.08)",
+          border: "1px solid rgba(239,68,68,0.25)",
+          color: "#ef4444",
+        }}
+        title="Face liveness not completed"
+      >
+        <ScanFace className="w-3 h-3" />
+        No Face
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all hover:opacity-80 cursor-pointer"
+        style={{
+          background: "rgba(33,115,70,0.12)",
+          border: `1px solid rgba(33,115,70,0.3)`,
+          color: DL_GREEN,
+        }}
+        title="Click to view face photo"
+      >
+        <ScanFace className="w-3 h-3" />
+        Face ✓
+      </button>
+      {open && <FacePhotoModal uid={uid} onClose={() => setOpen(false)} />}
+    </>
   );
 }
 
@@ -181,7 +320,7 @@ export default function UsersPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.06 }}
           >
-            {/* Header row: avatar + name + KYC badge */}
+            {/* Header row: avatar + name + KYC badge + Face badge */}
             <div className="flex items-start gap-3 mb-4">
               <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#6c5ce7] to-[#a855f7] flex items-center justify-center text-white font-bold text-sm shrink-0">
                 {worker.name.charAt(0)}
@@ -190,6 +329,7 @@ export default function UsersPage() {
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <h3 className="font-semibold text-sm">{worker.name}</h3>
                   <KycBadge verified={worker.aadhaar_verified} />
+                  <FaceBadge uid={worker.uid} verified={worker.face_verified} />
                 </div>
                 <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
                   <MapPin className="w-3 h-3" />

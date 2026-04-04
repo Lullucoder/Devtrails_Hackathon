@@ -17,6 +17,7 @@ import {
   Star,
   ShieldCheck,
   BadgeCheck,
+  ScanFace,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -61,8 +62,17 @@ export default function ProfilePage() {
   const aadhaarMasked     = (profileData as { aadhaar_masked?: string }).aadhaar_masked;
   const aadhaarVerifiedAt = (profileData as { aadhaar_verified_at?: string }).aadhaar_verified_at;
 
+  const faceVerified   = (profileData as { face_verified?: boolean }).face_verified ?? false;
+  const faceVerifiedAt = (profileData as { face_verified_at?: string }).face_verified_at;
+
   const verifiedDateStr = aadhaarVerifiedAt
     ? new Date(aadhaarVerifiedAt).toLocaleDateString("en-IN", {
+        day: "numeric", month: "long", year: "numeric",
+      })
+    : null;
+
+  const faceVerifiedDateStr = faceVerifiedAt
+    ? new Date(faceVerifiedAt).toLocaleDateString("en-IN", {
         day: "numeric", month: "long", year: "numeric",
       })
     : null;
@@ -94,6 +104,16 @@ export default function ProfilePage() {
               <BadgeCheck className="w-5 h-5" style={{ color: DL_GREEN }} />
             </motion.div>
           )}
+          {faceVerified && (
+            <motion.div
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: "spring", stiffness: 300, damping: 20, delay: 0.4 }}
+              title="Face Liveness Verified"
+            >
+              <ScanFace className="w-5 h-5" style={{ color: DL_GREEN }} />
+            </motion.div>
+          )}
         </div>
 
         <p className="text-sm text-muted-foreground">Quick Commerce Delivery Partner</p>
@@ -113,6 +133,23 @@ export default function ProfilePage() {
           >
             <ShieldCheck className="w-3.5 h-3.5" />
             KYC Verified
+          </motion.div>
+        )}
+        {/* Face Verified badge pill */}
+        {faceVerified && (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5, duration: 0.3 }}
+            className="mt-1.5 flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold"
+            style={{
+              background: "rgba(33,115,70,0.10)",
+              border: "1px solid rgba(33,115,70,0.3)",
+              color: DL_GREEN,
+            }}
+          >
+            <ScanFace className="w-3.5 h-3.5" />
+            Face Verified
           </motion.div>
         )}
       </motion.div>
@@ -154,6 +191,14 @@ export default function ProfilePage() {
               <span className="text-xs text-muted-foreground">Method</span>
               <span className="text-xs font-semibold" style={{ color: DL_GREEN }}>DigiLocker</span>
             </div>
+            {faceVerified && (
+              <div className="flex items-center justify-between pt-1 border-t" style={{ borderColor: "rgba(33,115,70,0.2)" }}>
+                <span className="text-xs text-muted-foreground">Liveness check</span>
+                <span className="text-xs font-semibold" style={{ color: DL_GREEN }}>
+                  ✓ Passed{faceVerifiedDateStr ? ` on ${faceVerifiedDateStr}` : ""}
+                </span>
+              </div>
+            )}
           </div>
         </motion.div>
       )}
