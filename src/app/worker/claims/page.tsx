@@ -246,8 +246,7 @@ export default function ClaimsPage() {
                         {/* Text */}
                         <div className="flex-1 min-w-0">
                           <p
-                            className="text-xs font-bold mb-0.5"
-                            style={{ color: "#c4b5fd" }}
+                            className="text-xs font-bold mb-0.5 text-primary"
                           >
                             Speed up your claim verification
                           </p>

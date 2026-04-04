@@ -413,7 +413,7 @@ export default function FaceLivenessCheck({
         <p
           style={{
             fontSize: "12px",
-            color: "#94a3b8",
+            color: "var(--muted-foreground)",
             letterSpacing: "0.04em",
             margin: 0,
           }}
@@ -427,7 +427,7 @@ export default function FaceLivenessCheck({
             style={{
               fontSize: "18px",
               fontWeight: 700,
-              color: "#1e293b",
+              color: "var(--foreground)",
               margin: 0,
               textAlign: "center",
               minHeight: "28px",
@@ -548,7 +548,7 @@ export default function FaceLivenessCheck({
           <p
             style={{
               fontSize: "14px",
-              color: "#64748b",
+              color: "var(--muted-foreground)",
               margin: 0,
               fontWeight: 600,
             }}
@@ -608,7 +608,7 @@ export default function FaceLivenessCheck({
           <p
             style={{
               fontSize: "14px",
-              color: "#64748b",
+              color: "var(--muted-foreground)",
               textAlign: "center",
               maxWidth: "300px",
               margin: 0,
