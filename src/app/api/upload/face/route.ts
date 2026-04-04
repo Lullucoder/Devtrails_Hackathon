@@ -125,22 +125,45 @@ function buildPresignedUrl({
   return `${endpoint}?${canonicalQueryString}&X-Amz-Signature=${signature}`;
 }
 
-// ── GET handler (admin photo viewer) ─────────────────────────────────────────
+// ── GET handler (worker self-fetch OR admin photo viewer) ─────────────────────
+//
+//  • Worker self-fetch: include `x-worker-uid` header → 2-minute presigned URL
+//    (short for security — worker fetches their own face for re-verification)
+//  • Admin viewer:     include `uid` query param    → 15-minute presigned URL
 
 export async function GET(request: NextRequest): Promise<Response> {
   try {
-    const uid = request.nextUrl.searchParams.get("uid")?.trim();
-    if (!uid) {
-      return Response.json({ error: "Missing uid query parameter" }, { status: 400 });
-    }
-
     const accountId       = requireEnv("R2_ACCOUNT_ID");
     const accessKeyId     = requireEnv("R2_ACCESS_KEY_ID");
     const secretAccessKey = requireEnv("R2_SECRET_ACCESS_KEY");
     const bucketName      = requireEnv("R2_BUCKET_NAME");
 
-    const key = `faces/${uid}.jpg`;
+    // ── Worker self-fetch path (2-minute URL) ─────────────────────────────
+    const workerUid = request.headers.get("x-worker-uid")?.trim();
+    if (workerUid) {
+      const key = `faces/${workerUid}.jpg`;
+      const presignedUrl = buildPresignedUrl({
+        accountId,
+        accessKeyId,
+        secretAccessKey,
+        bucketName,
+        key,
+        method: "GET",
+        expiresIn: 120, // 2 minutes for security
+      });
+      return Response.json({ presignedUrl, key });
+    }
 
+    // ── Admin viewer path (15-minute URL) ─────────────────────────────────
+    const uid = request.nextUrl.searchParams.get("uid")?.trim();
+    if (!uid) {
+      return Response.json(
+        { error: "Missing uid query parameter or x-worker-uid header" },
+        { status: 400 }
+      );
+    }
+
+    const key = `faces/${uid}.jpg`;
     const presignedUrl = buildPresignedUrl({
       accountId,
       accessKeyId,
