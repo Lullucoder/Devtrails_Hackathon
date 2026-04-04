@@ -366,8 +366,8 @@ export default function FaceReverificationModal({
             <div
               style={{
                 pointerEvents: "auto",
-                background: "#1c1d29",
-                border: "1px solid #2d2e3f",
+                background: "var(--card)",
+                border: "1px solid var(--border)",
                 borderRadius: "20px",
                 width: "100%",
                 maxWidth: "420px",
@@ -385,12 +385,12 @@ export default function FaceReverificationModal({
                   position: "absolute",
                   top: "16px",
                   right: "16px",
-                  background: "rgba(255,255,255,0.06)",
-                  border: "none",
+                  background: "var(--muted)",
+                  border: "1px solid var(--border)",
                   borderRadius: "8px",
                   padding: "6px",
                   cursor: "pointer",
-                  color: "#8b8d9b",
+                  color: "var(--muted-foreground)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -406,7 +406,7 @@ export default function FaceReverificationModal({
                   margin: "0 0 4px",
                   fontSize: "18px",
                   fontWeight: 700,
-                  color: "#f8f9fa",
+                  color: "var(--foreground)",
                   fontFamily: "var(--font-outfit, 'Inter', sans-serif)",
                 }}
               >
@@ -416,7 +416,7 @@ export default function FaceReverificationModal({
                 style={{
                   margin: "0 0 20px",
                   fontSize: "13px",
-                  color: "#8b8d9b",
+                  color: "var(--muted-foreground)",
                 }}
               >
                 Complete the liveness steps to boost your claim confidence.
@@ -466,7 +466,7 @@ export default function FaceReverificationModal({
                   </div>
                   <p
                     style={{
-                      color: "#f8f9fa",
+                      color: "var(--foreground)",
                       fontWeight: 600,
                       fontSize: "15px",
                       margin: 0,
@@ -475,7 +475,7 @@ export default function FaceReverificationModal({
                     Comparing your face…
                   </p>
                   <p
-                    style={{ color: "#8b8d9b", fontSize: "13px", margin: 0, textAlign: "center" }}
+                    style={{ color: "var(--muted-foreground)", fontSize: "13px", margin: 0, textAlign: "center" }}
                   >
                     Analysing identity landmarks against your onboarding photo.
                   </p>
@@ -521,7 +521,7 @@ export default function FaceReverificationModal({
                   >
                     Identity confirmed!
                   </p>
-                  <p style={{ color: "#f8f9fa", fontSize: "14px", margin: 0 }}>
+                  <p style={{ color: "var(--foreground)", fontSize: "14px", margin: 0 }}>
                     Your claim has been approved. Payout will be initiated
                     shortly.
                   </p>
@@ -600,7 +600,7 @@ export default function FaceReverificationModal({
                   </p>
                   <p
                     style={{
-                      color: "#8b8d9b",
+                      color: "var(--muted-foreground)",
                       fontSize: "14px",
                       margin: 0,
                       lineHeight: 1.6,
@@ -630,10 +630,10 @@ export default function FaceReverificationModal({
                     style={{
                       marginTop: "8px",
                       padding: "12px 32px",
-                      background: "#27293d",
-                      border: "1px solid #2d2e3f",
+                      background: "var(--muted)",
+                      border: "1px solid var(--border)",
                       borderRadius: "12px",
-                      color: "#f8f9fa",
+                      color: "var(--foreground)",
                       fontWeight: 600,
                       fontSize: "15px",
                       cursor: "pointer",
@@ -685,7 +685,7 @@ export default function FaceReverificationModal({
                   {errorMsg && (
                     <p
                       style={{
-                        color: "#8b8d9b",
+                        color: "var(--muted-foreground)",
                         fontSize: "13px",
                         margin: 0,
                         maxWidth: "320px",
@@ -716,10 +716,10 @@ export default function FaceReverificationModal({
                       onClick={handleClose}
                       style={{
                         padding: "12px 24px",
-                        background: "#27293d",
-                        border: "1px solid #2d2e3f",
+                        background: "var(--muted)",
+                        border: "1px solid var(--border)",
                         borderRadius: "12px",
-                        color: "#f8f9fa",
+                        color: "var(--foreground)",
                         fontWeight: 600,
                         fontSize: "14px",
                         cursor: "pointer",

@@ -18,13 +18,17 @@ import {
   ShieldCheck,
   BadgeCheck,
   ScanFace,
+  Sun,
+  Moon,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { useWorkerTheme } from "../layout";
 
 const DL_GREEN = "#217346";
 
 export default function ProfilePage() {
-  const { userProfile, signOut } = useAuth();
+  const { userProfile, user, signOut } = useAuth();
+  const { theme, setTheme } = useWorkerTheme();
   const router = useRouter();
 
   const handleSignOut = () => {
@@ -49,7 +53,14 @@ export default function ProfilePage() {
   };
 
   const items = [
-    { icon: Phone,     label: "Phone",        value: profileData.phone },
+    {
+      icon: Phone,
+      label: "Phone",
+      value:
+        profileData.phone ||
+        (user as { phoneNumber?: string | null } | null)?.phoneNumber ||
+        "Not available",
+    },
     { icon: MapPin,    label: "City & Zone",   value: `${profileData.city}, ${profileData.zone}` },
     { icon: Briefcase, label: "Platform",      value: profileData.platform },
     { icon: Clock,     label: "Working Hours", value: profileData.workingHours },
@@ -253,10 +264,58 @@ export default function ProfilePage() {
         ))}
       </div>
 
+      {/* ── Display Mode ─────────────────────────────────────────────── */}
+      <motion.div
+        className="glass rounded-2xl p-4 mb-4"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
+      >
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+          Display Mode
+        </p>
+        <div className="flex items-center gap-2">
+          {/* Light button */}
+          <button
+            id="worker-theme-light-btn"
+            onClick={() => setTheme("light")}
+            aria-pressed={theme === "light"}
+            style={{ minHeight: "48px" }}
+            className={`flex-1 flex items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-all ${
+              theme === "light"
+                ? "bg-amber-50 border-2 border-amber-400 text-amber-700"
+                : "glass border border-border text-muted-foreground hover:border-amber-300"
+            }`}
+          >
+            <Sun className="w-4 h-4" />
+            <span>Light</span>
+            <span className="text-[10px] opacity-70 hidden sm:inline">(outdoor)</span>
+          </button>
+
+          {/* Dark button */}
+          <button
+            id="worker-theme-dark-btn"
+            onClick={() => setTheme("dark")}
+            aria-pressed={theme === "dark"}
+            style={{ minHeight: "48px" }}
+            className={`flex-1 flex items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-all ${
+              theme === "dark"
+                ? "bg-slate-800 border-2 border-slate-500 text-slate-100"
+                : "glass border border-border text-muted-foreground hover:border-slate-400"
+            }`}
+          >
+            <Moon className="w-4 h-4" />
+            <span>Dark</span>
+            <span className="text-[10px] opacity-70 hidden sm:inline">(indoor)</span>
+          </button>
+        </div>
+      </motion.div>
+
       {/* Actions */}
       <div className="space-y-2">
         <button
           onClick={() => toast.success("₹1,250 received this week — 2 auto-approved claims")}
+          style={{ minHeight: "48px" }}
           className="w-full glass rounded-xl p-4 flex items-center gap-3 hover:bg-muted transition-colors"
         >
           <Shield className="w-5 h-5 text-primary" />
@@ -266,6 +325,7 @@ export default function ProfilePage() {
 
         <button
           onClick={handleSignOut}
+          style={{ minHeight: "48px" }}
           className="w-full rounded-xl p-4 flex items-center gap-3 bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.2)] hover:bg-[rgba(239,68,68,0.15)] transition-colors"
         >
           <LogOut className="w-5 h-5 text-destructive" />
