@@ -2,8 +2,10 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { type ConfirmationResult } from "firebase/auth";
 import { useAuth } from "@/contexts/AuthContext";
-import { DEMO_OTP } from "@/lib/mockDb";
+import { sendOTP } from "@/lib/auth";
+import { useRecaptcha } from "@/lib/hooks/useRecaptcha";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,10 +14,13 @@ import toast from "react-hot-toast";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { user, loading, sendOtp, verifyOtp } = useAuth();
+  const { user, role, loading, verifyOtp } = useAuth();
+  const { recaptchaRef, verifier, resetVerifier } = useRecaptcha();
+
   const [phone, setPhone] = useState("");
-  const [role, setRole] = useState<"worker" | "admin">("worker");
+  const [selectedRole, setSelectedRole] = useState<"worker" | "admin">("worker");
   const [otp, setOtp] = useState("");
+  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
   const [otpRequestedFor, setOtpRequestedFor] = useState<string | null>(null);
 
   const phoneDisplay = useMemo(() => {
@@ -32,12 +37,12 @@ export default function LoginPage() {
   }, [otpRequestedFor]);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !role) {
       return;
     }
 
-    router.replace(user.role === "admin" ? "/admin/dashboard" : "/worker/dashboard");
-  }, [router, user]);
+    router.replace(role === "admin" ? "/admin/dashboard" : "/worker/dashboard");
+  }, [router, user, role]);
 
   const handleSendOtp = async (event: FormEvent) => {
     event.preventDefault();
@@ -47,12 +52,19 @@ export default function LoginPage() {
       return;
     }
 
+    if (!verifier) {
+      toast.error("reCAPTCHA not ready. Please wait a moment.");
+      return;
+    }
+
     try {
-      await sendOtp(phone, role);
+      const result = await sendOTP(phone, verifier);
+      setConfirmationResult(result);
       setOtp("");
       setOtpRequestedFor(phone);
-      toast.success("Demo OTP sent");
+      toast.success("OTP sent!");
     } catch (error) {
+      resetVerifier();
       toast.error(error instanceof Error ? error.message : "Failed to send OTP");
     }
   };
@@ -65,8 +77,13 @@ export default function LoginPage() {
       return;
     }
 
+    if (!confirmationResult) {
+      toast.error("Please request an OTP first.");
+      return;
+    }
+
     try {
-      await verifyOtp(otp);
+      await verifyOtp(confirmationResult, otp, selectedRole);
       toast.success("Login successful");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to verify OTP");
@@ -77,9 +94,9 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(108,92,231,0.25),_transparent_45%),radial-gradient(circle_at_bottom,_rgba(236,72,153,0.18),_transparent_45%),#14141e] px-4">
       <Card className="w-full max-w-md border-border/70 bg-card/90 backdrop-blur">
         <CardHeader>
-          <CardTitle className="text-2xl font-semibold">Demo OTP Login</CardTitle>
+          <CardTitle className="text-2xl font-semibold">Phone Login</CardTitle>
           <CardDescription>
-            Hackathon demo mode. Enter any phone number and use OTP <span className="font-semibold text-foreground">{DEMO_OTP}</span>.
+            Enter your phone number to receive a one-time password.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -101,22 +118,25 @@ export default function LoginPage() {
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   type="button"
-                  variant={role === "worker" ? "default" : "outline"}
-                  onClick={() => setRole("worker")}
+                  variant={selectedRole === "worker" ? "default" : "outline"}
+                  onClick={() => setSelectedRole("worker")}
                   disabled={loading}
                 >
                   Worker
                 </Button>
                 <Button
                   type="button"
-                  variant={role === "admin" ? "default" : "outline"}
-                  onClick={() => setRole("admin")}
+                  variant={selectedRole === "admin" ? "default" : "outline"}
+                  onClick={() => setSelectedRole("admin")}
                   disabled={loading}
                 >
                   Admin
                 </Button>
               </div>
             </div>
+
+            {/* Invisible reCAPTCHA container */}
+            <div ref={recaptchaRef} />
 
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Sending OTP..." : "Send OTP"}
@@ -133,17 +153,17 @@ export default function LoginPage() {
                 placeholder="6-digit OTP"
                 value={otp}
                 onChange={(event) => setOtp(event.target.value)}
-                disabled={loading || !otpRequestedFor}
+                disabled={loading || !confirmationResult}
               />
             </div>
 
             {otpRequestedFor ? (
-              <p className="text-xs text-muted-foreground">OTP requested for {phoneDisplay}</p>
+              <p className="text-xs text-muted-foreground">OTP sent to {phoneDisplay}</p>
             ) : (
               <p className="text-xs text-muted-foreground">Request OTP first</p>
             )}
 
-            <Button type="submit" className="w-full" disabled={loading || !otpRequestedFor}>
+            <Button type="submit" className="w-full" disabled={loading || !confirmationResult}>
               {loading ? "Verifying..." : "Verify OTP & Login"}
             </Button>
           </form>

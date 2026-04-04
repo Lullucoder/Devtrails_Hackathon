@@ -1,16 +1,29 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Shield, Phone, KeyRound, ArrowRight, Loader2, HardHat, ShieldCheck } from "lucide-react";
+import {
+  Shield,
+  Phone,
+  KeyRound,
+  ArrowRight,
+  Loader2,
+  HardHat,
+  ShieldCheck,
+  RotateCcw,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
 } from "@/components/ui/dialog";
 import toast from "react-hot-toast";
+import { type ConfirmationResult } from "firebase/auth";
+import { useAuth } from "@/contexts/AuthContext";
+import { sendOTP, AuthError } from "@/lib/auth";
+import { useRecaptcha } from "@/lib/hooks/useRecaptcha";
+import { isMockAuthEnabled, mockSendOTP } from "@/lib/mockAuth";
 
-type Step = "role" | "phone" | "otp";
+type Step = "phone" | "otp";
 type Role = "worker" | "admin";
 
 interface LoginModalProps {
@@ -19,78 +32,147 @@ interface LoginModalProps {
 }
 
 export function LoginModal({ isOpen, onOpenChange }: LoginModalProps) {
-  const [step, setStep] = useState<Step>("role");
-  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  const { verifyOtp } = useAuth();
+  const { recaptchaRef, verifier, isReady, error: recaptchaError, resetVerifier } = useRecaptcha();
+  const useMockAuth = isMockAuthEnabled();
+
+  const [step, setStep] = useState<Step>("phone");
+  const [selectedRole, setSelectedRole] = useState<Role>("worker");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
+  const [confirmationResult, setConfirmationResult] =
+    useState<ConfirmationResult | null>(null);
+  const [mockPhone, setMockPhone] = useState("");
+  const [resendCountdown, setResendCountdown] = useState(0);
+
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Reset state when modal opens
+  // ── Reset state when modal opens ──────────────────────────────────────
   useEffect(() => {
     if (isOpen) {
-      setStep("role");
-      setSelectedRole(null);
+      setStep("phone");
+      setSelectedRole("worker");
       setPhone("");
       setOtp(["", "", "", "", "", ""]);
       setLoading(false);
+      setConfirmationResult(null);
+      setMockPhone("");
+      setResendCountdown(0);
     }
   }, [isOpen]);
 
-  const handleRoleSelect = (role: Role) => {
-    setSelectedRole(role);
-    setStep("phone");
-  };
+  // ── Resend countdown timer ────────────────────────────────────────────
+  useEffect(() => {
+    if (resendCountdown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCountdown((prev) => (prev <= 1 ? 0 : prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCountdown]);
 
-  const handleSendOTP = async () => {
-    if (phone.length < 10) {
+  // ── STEP 1: Send OTP ──────────────────────────────────────────────────
+  const handleSendOTP = useCallback(async () => {
+    const cleaned = phone.replace(/\D/g, "");
+    if (cleaned.length !== 10) {
       toast.error("Please enter a valid 10-digit phone number");
       return;
     }
-    setLoading(true);
-    try {
-      await new Promise((res) => setTimeout(res, 800));
-      setStep("otp");
-      toast.success("OTP sent successfully!");
-    } catch {
-      toast.error("Failed to send OTP");
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const handleVerifyOTP = async () => {
-    const code = otp.join("");
-    if (code.length !== 6) {
-      toast.error("Please enter a valid 6-digit OTP");
+    if (!useMockAuth && (!verifier || !isReady)) {
+      toast.error("Please complete the reCAPTCHA verification first");
       return;
     }
+
     setLoading(true);
     try {
-      await new Promise((res) => setTimeout(res, 800));
-      toast.success("Verified successfully!");
-      onOpenChange(false);
-      if (selectedRole === "admin") {
-        router.push("/admin/dashboard");
+      if (useMockAuth) {
+        // Mock auth flow
+        await mockSendOTP(cleaned);
+        setMockPhone(cleaned);
+        setOtp(["", "", "", "", "", ""]);
+        setStep("otp");
+        setResendCountdown(30);
+        toast.success("OTP sent! Use 123456");
       } else {
-        router.push("/worker/dashboard");
+        // Firebase auth flow
+        const result = await sendOTP(cleaned, verifier!);
+        setConfirmationResult(result);
+        setOtp(["", "", "", "", "", ""]);
+        setStep("otp");
+        setResendCountdown(30);
+        toast.success("OTP sent!");
       }
-    } catch {
-      toast.error("Invalid OTP");
+    } catch (error) {
+      if (!useMockAuth) {
+        resetVerifier();
+      }
+      if (error instanceof AuthError) {
+        toast.error(error.message);
+      } else {
+        toast.error("Failed to send OTP. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [phone, verifier, isReady, useMockAuth, resetVerifier]);
 
+  // ── STEP 2: Verify OTP ────────────────────────────────────────────────
+  const handleVerifyOTP = useCallback(async (code: string) => {
+    if (code.length !== 6) return;
+    
+    if (!useMockAuth && !confirmationResult) {
+      toast.error("Please request an OTP first.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      if (useMockAuth) {
+        await verifyOtp(mockPhone, code, selectedRole);
+      } else {
+        await verifyOtp(confirmationResult!, code, selectedRole);
+      }
+      toast.success("Login successful!");
+      onOpenChange(false);
+    } catch (error) {
+      if (error instanceof AuthError) {
+        switch (error.code) {
+          case "invalid-otp":
+            toast.error("Incorrect OTP. Please check and try again.");
+            break;
+          case "otp-expired":
+            toast.error("OTP expired. Please request a new one.");
+            break;
+          default:
+            toast.error(error.message);
+        }
+      } else {
+        toast.error(error instanceof Error ? error.message : "Verification failed. Please try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [confirmationResult, mockPhone, selectedRole, useMockAuth, verifyOtp, onOpenChange]);
+
+  // ── OTP input handlers ────────────────────────────────────────────────
   const handleOtpChange = (index: number, value: string) => {
     if (value.length > 1) value = value.slice(-1);
     if (!/^\d*$/.test(value)) return;
+
     const newOtp = [...otp];
     newOtp[index] = value;
     setOtp(newOtp);
+
+    // Auto-advance
     if (value && index < 5) {
       otpRefs.current[index + 1]?.focus();
+    }
+
+    // Auto-submit when all 6 digits entered
+    const fullCode = newOtp.join("");
+    if (fullCode.length === 6) {
+      handleVerifyOTP(fullCode);
     }
   };
 
@@ -100,16 +182,71 @@ export function LoginModal({ isOpen, onOpenChange }: LoginModalProps) {
     }
   };
 
-  const getSubtitle = () => {
-    if (step === "role") return "Choose how you want to sign in";
-    if (step === "phone")
-      return `Signing in as ${selectedRole === "admin" ? "Admin" : "Worker"} — enter your phone number`;
-    return "Enter the 6-digit OTP sent to your phone";
+  const handleOtpPaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!pasted) return;
+
+    const newOtp = ["", "", "", "", "", ""];
+    for (let i = 0; i < pasted.length; i++) {
+      newOtp[i] = pasted[i];
+    }
+    setOtp(newOtp);
+
+    // Focus last filled or next empty
+    const focusIdx = Math.min(pasted.length, 5);
+    otpRefs.current[focusIdx]?.focus();
+
+    // Auto-submit if full
+    if (pasted.length === 6) {
+      handleVerifyOTP(pasted);
+    }
   };
+
+  // ── Resend OTP ────────────────────────────────────────────────────────
+  const handleResendOTP = async () => {
+    if (resendCountdown > 0) return;
+    if (!useMockAuth && !verifier) return;
+
+    setLoading(true);
+    try {
+      if (useMockAuth) {
+        await mockSendOTP(mockPhone);
+        setOtp(["", "", "", "", "", ""]);
+        setResendCountdown(30);
+        toast.success("OTP resent! Use 123456");
+      } else {
+        const result = await sendOTP(phone.replace(/\D/g, ""), verifier!);
+        setConfirmationResult(result);
+        setOtp(["", "", "", "", "", ""]);
+        setResendCountdown(30);
+        toast.success("OTP resent!");
+      }
+    } catch (error) {
+      if (!useMockAuth) {
+        resetVerifier();
+      }
+      if (error instanceof AuthError) {
+        toast.error(error.message);
+      } else {
+        toast.error("Failed to resend OTP.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── Masked phone for display ──────────────────────────────────────────
+  const maskedPhone = phone.length >= 4
+    ? `${"•".repeat(Math.max(0, phone.length - 4))}${phone.slice(-4)}`
+    : phone;
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md p-0 overflow-hidden bg-transparent border-none ring-0" showCloseButton={false}>
+      <DialogContent
+        className="sm:max-w-md p-0 overflow-hidden bg-transparent border-none ring-0"
+        showCloseButton={false}
+      >
         <div className="glass rounded-3xl p-8 sm:p-10 relative">
           {/* Close button */}
           <button
@@ -133,77 +270,48 @@ export function LoginModal({ isOpen, onOpenChange }: LoginModalProps) {
             Welcome to <span className="gradient-text">RoziRakshak</span>
           </h1>
           <p className="text-center text-muted-foreground text-sm mb-8">
-            {getSubtitle()}
+            {step === "phone"
+              ? "Enter your phone number and select your role"
+              : `Enter the 6-digit OTP sent to +91 ${maskedPhone}`}
           </p>
 
-          <AnimatePresence mode="wait">
+          {/* reCAPTCHA container - only show if not using mock auth */}
+          {!useMockAuth && (
+            <div className="flex flex-col items-center mb-6">
+              <div id="recaptcha-container" ref={recaptchaRef} />
+              {recaptchaError && (
+                <p className="text-xs text-destructive mt-2 text-center">
+                  {recaptchaError}
+                </p>
+              )}
+              {!isReady && !recaptchaError && (
+                <p className="text-xs text-muted-foreground mt-2 animate-pulse">
+                  Loading security verification...
+                </p>
+              )}
+            </div>
+          )}
 
-            {/* — STEP 1: Role Selection — */}
-            {step === "role" && (
+          {/* Mock auth indicator */}
+          {useMockAuth && step === "phone" && (
+            <div className="mb-4 p-3 rounded-xl bg-warning/10 border border-warning/30">
+              <p className="text-xs text-warning text-center">
+                🧪 Mock Auth Mode: Use OTP <strong>123456</strong>
+              </p>
+            </div>
+          )}
+
+          <AnimatePresence mode="wait">
+            {/* ── STEP 1: Phone + Role ── */}
+            {step === "phone" && (
               <motion.div
-                key="role"
+                key="phone"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.3 }}
               >
-                <div className="grid grid-cols-2 gap-4">
-                  <button
-                    onClick={() => handleRoleSelect("worker")}
-                    className="group flex flex-col items-center gap-3 p-5 rounded-2xl border border-border bg-muted hover:border-[#6c5ce7] hover:bg-[#6c5ce7]/10 transition-all duration-300 cursor-pointer"
-                  >
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#6c5ce7] to-[#a855f7] flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                      <HardHat className="w-6 h-6 text-white" />
-                    </div>
-                    <div className="text-center">
-                      <p className="font-semibold text-foreground text-sm">Worker</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Field access</p>
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={() => handleRoleSelect("admin")}
-                    className="group flex flex-col items-center gap-3 p-5 rounded-2xl border border-border bg-muted hover:border-[#ec4899] hover:bg-[#ec4899]/10 transition-all duration-300 cursor-pointer"
-                  >
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#ec4899] to-[#f43f5e] flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                      <ShieldCheck className="w-6 h-6 text-white" />
-                    </div>
-                    <div className="text-center">
-                      <p className="font-semibold text-foreground text-sm">Admin</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Full control</p>
-                    </div>
-                  </button>
-                </div>
-
-                <p className="text-center text-xs text-muted-foreground mt-5">
-                  Select your role to continue
-                </p>
-              </motion.div>
-            )}
-
-            {/* — STEP 2: Phone Number — */}
-            {step === "phone" && (
-              <motion.div
-                key="phone"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.3 }}
-              >
-                <div
-                  className={`flex items-center gap-2 mb-5 px-3 py-2 rounded-xl text-sm font-medium w-fit mx-auto ${
-                    selectedRole === "admin"
-                      ? "bg-[#ec4899]/10 text-[#ec4899] border border-[#ec4899]/30"
-                      : "bg-[#6c5ce7]/10 text-[#6c5ce7] border border-[#6c5ce7]/30"
-                  }`}
-                >
-                  {selectedRole === "admin"
-                    ? <ShieldCheck className="w-4 h-4" />
-                    : <HardHat className="w-4 h-4" />
-                  }
-                  {selectedRole === "admin" ? "Admin Login" : "Worker Login"}
-                </div>
-
+                {/* Phone input */}
                 <div className="mb-5">
                   <label className="block text-sm font-medium text-muted-foreground mb-2">
                     Phone Number
@@ -215,7 +323,9 @@ export function LoginModal({ isOpen, onOpenChange }: LoginModalProps) {
                       type="tel"
                       maxLength={10}
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
+                      onChange={(e) =>
+                        setPhone(e.target.value.replace(/\D/g, ""))
+                      }
                       placeholder="9876543210"
                       className="flex-1 bg-transparent outline-none text-foreground placeholder-muted-foreground"
                       autoFocus
@@ -223,32 +333,80 @@ export function LoginModal({ isOpen, onOpenChange }: LoginModalProps) {
                   </div>
                 </div>
 
+                {/* Role selector */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-muted-foreground mb-2">
+                    I am a
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Worker toggle */}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedRole("worker")}
+                      className={`group flex items-center justify-center gap-2.5 py-3.5 px-4 rounded-xl font-semibold text-sm transition-all duration-300 cursor-pointer ${
+                        selectedRole === "worker"
+                          ? "bg-gradient-to-r from-[#6c5ce7] to-[#a855f7] text-white shadow-lg shadow-[#6c5ce7]/25"
+                          : "border border-border text-muted-foreground hover:border-[#6c5ce7]/50 hover:text-foreground bg-transparent"
+                      }`}
+                    >
+                      <HardHat
+                        className={`w-5 h-5 transition-transform duration-300 ${
+                          selectedRole === "worker" ? "scale-110" : ""
+                        }`}
+                      />
+                      Worker
+                    </button>
+
+                    {/* Admin toggle */}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedRole("admin")}
+                      className={`group flex items-center justify-center gap-2.5 py-3.5 px-4 rounded-xl font-semibold text-sm transition-all duration-300 cursor-pointer ${
+                        selectedRole === "admin"
+                          ? "bg-gradient-to-r from-[#ec4899] to-[#f43f5e] text-white shadow-lg shadow-[#ec4899]/25"
+                          : "border border-border text-muted-foreground hover:border-[#ec4899]/50 hover:text-foreground bg-transparent"
+                      }`}
+                    >
+                      <ShieldCheck
+                        className={`w-5 h-5 transition-transform duration-300 ${
+                          selectedRole === "admin" ? "scale-110" : ""
+                        }`}
+                      />
+                      Admin
+                    </button>
+                  </div>
+
+                  {/* Helper text */}
+                  <p className="text-xs text-muted-foreground mt-3 text-center leading-relaxed">
+                    First time? Your role is set when you first sign up.
+                    <br />
+                    Returning users are recognised automatically.
+                  </p>
+                </div>
+
+                {/* Send OTP button */}
                 <button
                   onClick={handleSendOTP}
-                  disabled={loading || phone.length < 10}
+                  disabled={loading || phone.replace(/\D/g, "").length < 10 || (!useMockAuth && !isReady)}
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-[#6c5ce7] to-[#a855f7] text-white font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : !useMockAuth && !isReady ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Loading reCAPTCHA...
+                    </>
                   ) : (
-                    <>Send OTP <ArrowRight className="w-5 h-5" /></>
+                    <>
+                      Send OTP <ArrowRight className="w-5 h-5" />
+                    </>
                   )}
-                </button>
-
-                <button
-                  onClick={() => {
-                    setStep("role");
-                    setPhone("");
-                    setSelectedRole(null);
-                  }}
-                  className="w-full mt-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  ← Change Role
                 </button>
               </motion.div>
             )}
 
-            {/* — STEP 3: OTP Verification — */}
+            {/* ── STEP 2: OTP Verification ── */}
             {step === "otp" && (
               <motion.div
                 key="otp"
@@ -266,39 +424,68 @@ export function LoginModal({ isOpen, onOpenChange }: LoginModalProps) {
                     {otp.map((digit, i) => (
                       <input
                         key={i}
-                        ref={(el) => { otpRefs.current[i] = el; }}
+                        ref={(el) => {
+                          otpRefs.current[i] = el;
+                        }}
                         type="text"
                         inputMode="numeric"
                         maxLength={1}
                         value={digit}
                         onChange={(e) => handleOtpChange(i, e.target.value)}
                         onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                        onPaste={i === 0 ? handleOtpPaste : undefined}
                         className="w-11 h-13 rounded-xl bg-muted border border-border text-center text-lg font-bold text-foreground focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                         autoFocus={i === 0}
+                        disabled={loading}
                       />
                     ))}
                   </div>
-                  <p className="text-xs text-muted-foreground text-center mt-3">
-                    <span className="gradient-text font-semibold">Demo mode</span> — enter any 6 digits
-                  </p>
                 </div>
 
+                {/* Verify button */}
                 <button
-                  onClick={handleVerifyOTP}
+                  onClick={() => handleVerifyOTP(otp.join(""))}
                   disabled={loading || otp.join("").length !== 6}
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-[#6c5ce7] to-[#a855f7] text-white font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
                   ) : (
-                    <>Verify & Continue <ArrowRight className="w-5 h-5" /></>
+                    <>
+                      Verify & Continue <ArrowRight className="w-5 h-5" />
+                    </>
                   )}
                 </button>
 
+                {/* Resend OTP / countdown */}
+                <div className="flex items-center justify-center mt-4">
+                  {resendCountdown > 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Resend OTP in{" "}
+                      <span className="font-semibold text-foreground">
+                        {resendCountdown}s
+                      </span>
+                    </p>
+                  ) : (
+                    <button
+                      onClick={handleResendOTP}
+                      disabled={loading}
+                      className="flex items-center gap-1.5 text-xs text-primary-light hover:text-foreground transition-colors font-medium"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Resend OTP
+                    </button>
+                  )}
+                </div>
+
+                {/* Change phone */}
                 <button
                   onClick={() => {
                     setStep("phone");
                     setOtp(["", "", "", "", "", ""]);
+                    setConfirmationResult(null);
+                    setMockPhone("");
+                    setResendCountdown(0);
                   }}
                   className="w-full mt-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
@@ -306,7 +493,6 @@ export function LoginModal({ isOpen, onOpenChange }: LoginModalProps) {
                 </button>
               </motion.div>
             )}
-
           </AnimatePresence>
         </div>
       </DialogContent>
