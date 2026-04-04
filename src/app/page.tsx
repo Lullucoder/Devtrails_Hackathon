@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Shield,
@@ -17,6 +18,7 @@ import {
   IndianRupee,
 } from "lucide-react";
 import { LoginModal } from "@/components/LoginModal";
+import { useAuth } from "@/contexts/AuthContext";
 
 const triggerTypes = [
   { icon: CloudRain, label: "Heavy Rain", color: "#3b82f6", desc: "Flooding & waterlogging" },
@@ -67,6 +69,25 @@ const fadeUp = {
 
 export default function LandingPage() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const { user, userProfile, role, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (loading) return;
+
+    if (user && userProfile) {
+      if (role === "admin") {
+        router.replace("/admin/dashboard");
+      } else {
+        router.replace("/worker/dashboard");
+      }
+    }
+  }, [user, userProfile, role, loading, router]);
+
+  // Avoid flash of landing page while loading or redirecting logged-in user
+  if (loading || (user && userProfile)) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen">

@@ -28,26 +28,18 @@ export default function ProfilePage() {
     router.push("/");
   };
 
-  const profileData = userProfile || {
-    name: "Arjun K.",
-    phone: "+919876543210",
-    city: "Bengaluru",
-    platform: "Zepto",
-    zone: "Koramangala",
-    workingHours: "Morning",
-    upiId: "arjun@upi",
-    trustScore: 0.91,
-  };
+  // Layout guard already ensures userProfile is non-null at this point
+  if (!userProfile) return null;
 
   const items = [
-    { icon: Phone, label: "Phone", value: profileData.phone },
-    { icon: MapPin, label: "City & Zone", value: `${profileData.city}, ${profileData.zone}` },
-    { icon: Briefcase, label: "Platform", value: profileData.platform },
-    { icon: Clock, label: "Working Hours", value: profileData.workingHours },
-    { icon: Wallet, label: "UPI ID", value: profileData.upiId },
+    { icon: Phone, label: "Phone", value: userProfile.phone },
+    { icon: MapPin, label: "City & Zone", value: `${userProfile.city}, ${userProfile.zone}` },
+    { icon: Briefcase, label: "Platform", value: userProfile.platform },
+    { icon: Clock, label: "Working Hours", value: userProfile.workingHours },
+    { icon: Wallet, label: "UPI ID", value: userProfile.upiId },
   ];
 
-  const trustScore = typeof profileData.trustScore === "number" ? profileData.trustScore : 0.91;
+  const trustScore = typeof userProfile.trustScore === "number" ? userProfile.trustScore : 0;
 
   return (
     <div className="px-4 pt-6">
@@ -61,7 +53,7 @@ export default function ProfilePage() {
           <UserCircle className="w-12 h-12 text-white" />
         </div>
         <h1 className="text-xl font-bold" style={{ fontFamily: "var(--font-outfit)" }}>
-          {profileData.name}
+          {userProfile.name || "New User"}
         </h1>
         <p className="text-sm text-muted-foreground">Quick Commerce Delivery Partner</p>
       </motion.div>
