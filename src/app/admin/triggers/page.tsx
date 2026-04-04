@@ -16,6 +16,9 @@ import {
   Filter,
   Loader2,
   AlertTriangle,
+  ShieldCheck,
+  Eye,
+  ChevronRight,
 } from "lucide-react";
 import {
   Card,
@@ -39,6 +42,7 @@ import {
   type Timestamp,
 } from "firebase/firestore";
 import toast from "react-hot-toast";
+import AuditDrawer, { type TriggerDocWithAudit } from "./AuditDrawer";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  CONSTANTS
@@ -100,6 +104,11 @@ interface TriggerDoc {
   status?: string;
   affectedWorkers: number;
   createdAt: Timestamp | string | null;
+  // Audit fields (read from Firestore, may not exist on older docs)
+  source_feed_snapshot?: Record<string, unknown> | null;
+  evaluation_logic_version?: string | null;
+  claims_created?: string[];
+  reviewed_by_admin?: boolean;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -148,6 +157,7 @@ export default function TriggerAnalyticsPage() {
   const [filterType, setFilterType] = useState<string>("all");
   const [filterSeverity, setFilterSeverity] = useState<string>("all");
   const [firingType, setFiringType] = useState<TriggerTypeKey | null>(null);
+  const [selectedTrigger, setSelectedTrigger] = useState<TriggerDoc | null>(null);
 
   // ── Real-time Firestore listener ────────────────────────────────────────
   useEffect(() => {
@@ -166,6 +176,12 @@ export default function TriggerAnalyticsPage() {
         })) as TriggerDoc[];
         setTriggers(docs);
         setLoading(false);
+
+        // Keep selected trigger in sync with real-time data
+        setSelectedTrigger((prev) => {
+          if (!prev) return null;
+          return docs.find((d) => d.id === prev.id) ?? null;
+        });
       },
       (err) => {
         console.error("Firestore listener error:", err);
@@ -372,7 +388,7 @@ export default function TriggerAnalyticsPage() {
             <div>
               <CardTitle className="text-base font-semibold">Live Trigger Feed</CardTitle>
               <CardDescription className="text-xs">
-                Real-time Firestore events · Showing {filtered.length} of {totalCount}
+                Real-time Firestore events · Showing {filtered.length} of {totalCount} · Click a row to audit
               </CardDescription>
             </div>
 
@@ -439,6 +455,8 @@ export default function TriggerAnalyticsPage() {
                       <th className="text-left px-3 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase">Raw Value</th>
                       <th className="text-left px-3 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase">Workers</th>
                       <th className="text-left px-3 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase">Source</th>
+                      <th className="text-left px-3 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase">Reviewed</th>
+                      <th className="w-8"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -454,11 +472,12 @@ export default function TriggerAnalyticsPage() {
                           <motion.tr
                             key={t.id}
                             layout
-                            className="border-b border-border hover:bg-muted/50 transition-colors"
+                            className="border-b border-border hover:bg-muted/50 transition-colors cursor-pointer group"
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: 10 }}
                             transition={{ delay: Math.min(i * 0.03, 0.5) }}
+                            onClick={() => setSelectedTrigger(t)}
                           >
                             {/* Time */}
                             <td className="px-3 py-3">
@@ -524,13 +543,12 @@ export default function TriggerAnalyticsPage() {
 
                             {/* Source */}
                             <td className="px-3 py-3">
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                                t.source === "manual_test"
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${t.source === "manual_test"
                                   ? "bg-primary/10 text-primary"
-                                  : t.source === "mock_feed" 
-                                  ? "bg-[#10b981]/10 text-[#10b981]"
-                                  : "bg-muted text-muted-foreground"
-                              }`}>
+                                  : t.source === "mock_feed"
+                                    ? "bg-[#10b981]/10 text-[#10b981]"
+                                    : "bg-muted text-muted-foreground"
+                                }`}>
                                 {t.source === "manual_test" ? (
                                   <><Zap className="w-3 h-3" /> Manual</>
                                 ) : t.source === "mock_feed" ? (
@@ -539,6 +557,26 @@ export default function TriggerAnalyticsPage() {
                                   <><Clock className="w-3 h-3" /> {t.source || "Unknown"}</>
                                 )}
                               </span>
+                            </td>
+
+                            {/* Reviewed */}
+                            <td className="px-3 py-3">
+                              {t.reviewed_by_admin ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#10b981]/10 text-[#10b981]">
+                                  <ShieldCheck className="w-3 h-3" />
+                                  Yes
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-500">
+                                  <Eye className="w-3 h-3" />
+                                  No
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Chevron */}
+                            <td className="px-2 py-3">
+                              <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-foreground transition-colors" />
                             </td>
                           </motion.tr>
                         );
@@ -603,6 +641,17 @@ export default function TriggerAnalyticsPage() {
           </Card>
         </motion.div>
       )}
+
+      {/* ── Audit Drawer ──────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {selectedTrigger && (
+          <AuditDrawer
+            key={selectedTrigger.id}
+            trigger={selectedTrigger as TriggerDocWithAudit}
+            onClose={() => setSelectedTrigger(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -360,7 +360,7 @@ export async function runTriggerMonitor(): Promise<{
       const triggerEventId = await writeTriggerEvent(trigger);
       console.log(
         `   ⚡ [${trigger.trigger_type}] ${trigger.zone_id} (${city}) ` +
-          `severity=${trigger.severity} raw=${trigger.raw_value} → doc: ${triggerEventId}`
+        `severity=${trigger.severity} raw=${trigger.raw_value} → doc: ${triggerEventId}`
       );
 
       // 3b. Find matching active policies
@@ -400,7 +400,7 @@ export async function runTriggerMonitor(): Promise<{
           summary.claimsCreated++;
           console.log(
             `      ├─ Claim created: ${claimId} for worker ${match.workerName} ` +
-              `(${match.workerId}) policy=${match.policyId}`
+            `(${match.workerId}) policy=${match.policyId}`
           );
         } catch (claimErr) {
           const msg =
