@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import FaceReverificationModal from "@/components/FaceReverificationModal";
 import { useAuth } from "@/contexts/AuthContext";
+import { Timestamp } from "firebase/firestore";
 
 // ─── Static data ──────────────────────────────────────────────────────────────
 

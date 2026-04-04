@@ -65,6 +65,7 @@ const statusClass: Record<string, string> = {
 
 export default function WorkerDashboard() {
   const { theme, setTheme } = useWorkerTheme();
+  const { userProfile } = useAuth();
 
   // Dismissable dark-mode banner
   const DISMISS_KEY = "worker-dark-tip-dismissed";

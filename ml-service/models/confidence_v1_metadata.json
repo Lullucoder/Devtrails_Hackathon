@@ -1,6 +1,6 @@
 {
   "version": "v1",
-  "trained_at": "2026-04-04T16:31:58.772274",
+  "trained_at": "2026-04-04T19:14:26.630109",
   "n_samples": 500,
   "n_features": 16,
   "accuracy": 0.68,

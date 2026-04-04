@@ -1,6 +1,6 @@
 {
   "version": "v1",
-  "trained_at": "2026-04-04T16:31:53.560981",
+  "trained_at": "2026-04-04T19:14:16.272611",
   "rmse": 2.4351922004998388,
   "n_train_samples": 800,
   "n_test_samples": 200,

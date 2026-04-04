@@ -165,6 +165,8 @@ def main():
     print("\n" + "-"*70)
     print("STEP 3/5: Training Forecasting Engine (Prophet)")
     print("-"*70)
+
+    strict_forecast_training = _is_truthy_env("STRICT_FORECAST_TRAINING", default=False)
     
     try:
         from forecasting import train_forecasting_models
@@ -180,8 +182,17 @@ def main():
         logger.info(f"✓ Forecasting Engine trained: {metadata['n_zones']} zones")
     except Exception as e:
         logger.error(f"✗ Forecasting Engine training failed: {e}")
-        training_results['forecasting_engine'] = {'status': f'failed: {e}'}
-        return 1
+        training_results['forecasting_engine'] = {
+            'status': f'failed: {e}',
+            'n_zones': 0,
+            'zones': []
+        }
+        if strict_forecast_training:
+            logger.error("STRICT_FORECAST_TRAINING=true, failing build due to forecasting training error")
+            return 1
+        logger.warning(
+            "Continuing without trained forecasting model. API will use fallback forecast logic until retraining succeeds."
+        )
     
     # ========================================================================
     # STEP 4: Train Fraud Detector (Isolation Forest)
@@ -242,7 +253,17 @@ def main():
     print("TRAINING SUMMARY")
     print("="*70)
     
-    print(f"\n✓ All 4 models trained successfully in {total_time:.1f} seconds\n")
+    failed_modules = []
+    for module_name, result in training_results.items():
+        if isinstance(result, dict) and result.get('status') and result.get('status') != 'success':
+            failed_modules.append(module_name)
+
+    if failed_modules:
+        print(f"\nWARNING: Training completed with partial failures in {total_time:.1f} seconds")
+        print(f"Failed modules: {', '.join(failed_modules)}")
+        print("Fallback logic remains available for failed modules.\n")
+    else:
+        print(f"\n✓ All 4 models trained successfully in {total_time:.1f} seconds\n")
     
     print("Model Performance:")
     print(f"  1. Premium Engine (XGBoost)")
@@ -250,8 +271,12 @@ def main():
     print(f"     - Samples: {training_results['premium_engine']['n_samples']}")
     
     print(f"\n  2. Forecasting Engine (Prophet)")
-    print(f"     - Zones: {training_results['forecasting_engine']['n_zones']}")
-    print(f"     - Zone IDs: {', '.join(training_results['forecasting_engine']['zones'])}")
+    if training_results['forecasting_engine']['status'] == 'success':
+        print(f"     - Zones: {training_results['forecasting_engine']['n_zones']}")
+        print(f"     - Zone IDs: {', '.join(training_results['forecasting_engine']['zones'])}")
+    else:
+        print(f"     - Status: {training_results['forecasting_engine']['status']}")
+        print("     - Serving fallback rolling-average forecast until retrained")
     
     print(f"\n  3. Fraud Detector (Isolation Forest)")
     print(f"     - Contamination: {training_results['fraud_detector']['contamination']}")
@@ -265,7 +290,10 @@ def main():
     print(f"\nTotal Training Time: {total_time:.1f} seconds")
     
     print("\n" + "="*70)
-    print("✓ Training complete! All models saved to ./models/")
+    if failed_modules:
+        print("Training complete with warnings. Available artifacts saved to ./models/")
+    else:
+        print("✓ Training complete! All models saved to ./models/")
     print("="*70 + "\n")
     
     return 0
