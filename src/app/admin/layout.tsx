@@ -30,6 +30,7 @@ const navItems = [
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { user, role, loading, signOut } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
