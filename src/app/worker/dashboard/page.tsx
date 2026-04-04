@@ -17,6 +17,11 @@ import {
   CheckCircle2,
   Loader2,
   Zap,
+  FileText,
+  Clock,
+  CircleDot,
+  CheckCheck,
+  Banknote,
 } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -27,6 +32,7 @@ import {
   query,
   where,
   orderBy,
+  limit,
   onSnapshot,
   type Timestamp,
 } from "firebase/firestore";
@@ -78,6 +84,64 @@ const SEVERITY_CONFIG: Record<string, { label: string; color: string; bg: string
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
+//  PAYOUT RANGES BY SEVERITY
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const PAYOUT_RANGES: Record<string, { min: number; max: number; label: string }> = {
+  moderate: { min: 150, max: 250, label: "₹150 – ₹250" },
+  high: { min: 300, max: 500, label: "₹300 – ₹500" },
+  severe: { min: 600, max: 800, label: "₹600 – ₹800" },
+};
+
+const CLAIM_STATUS_CONFIG: Record<
+  string,
+  { label: string; color: string; bg: string; step: number }
+> = {
+  pending_fraud_check: {
+    label: "Pending Verification",
+    color: "#f59e0b",
+    bg: "rgba(245,158,11,0.12)",
+    step: 1,
+  },
+  under_review: {
+    label: "Under Review",
+    color: "#f59e0b",
+    bg: "rgba(245,158,11,0.12)",
+    step: 1,
+  },
+  auto_approved: {
+    label: "Auto Approved",
+    color: "#10b981",
+    bg: "rgba(16,185,129,0.12)",
+    step: 2,
+  },
+  approved: {
+    label: "Approved",
+    color: "#10b981",
+    bg: "rgba(16,185,129,0.12)",
+    step: 2,
+  },
+  paid: {
+    label: "Paid",
+    color: "#6c5ce7",
+    bg: "rgba(108,92,231,0.12)",
+    step: 3,
+  },
+  held: {
+    label: "Held for Review",
+    color: "#ef4444",
+    bg: "rgba(239,68,68,0.12)",
+    step: 1,
+  },
+  denied: {
+    label: "Denied",
+    color: "#ef4444",
+    bg: "rgba(239,68,68,0.12)",
+    step: 0,
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
 //  TYPES
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -90,6 +154,18 @@ interface TriggerAlertDoc {
   details: string;
   createdAt: Timestamp | string | null;
   startTime: Timestamp | string | null;
+}
+
+interface AutoClaimDoc {
+  id: string;
+  triggerType: string;
+  triggerSeverity: string;
+  status: string;
+  payoutAmount: number;
+  description: string;
+  zone: string;
+  autoInitiated: boolean;
+  createdAt: Timestamp | string | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -383,12 +459,204 @@ function ActiveAlerts({ zone }: { zone: string }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+//  AUTO CLAIM CARD COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function AutoClaimCard({ workerId }: { workerId: string }) {
+  const [claims, setClaims] = useState<AutoClaimDoc[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!workerId) {
+      setLoading(false);
+      return;
+    }
+
+    const q = query(
+      collection(db, "claims"),
+      where("workerId", "==", workerId),
+      where("autoInitiated", "==", true),
+      orderBy("createdAt", "desc"),
+      limit(3)
+    );
+
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const docs = snap.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        })) as AutoClaimDoc[];
+        setClaims(docs);
+        setLoading(false);
+      },
+      (err) => {
+        console.error("AutoClaimCard listener error:", err);
+        setLoading(false);
+      }
+    );
+
+    return () => unsub();
+  }, [workerId]);
+
+  if (loading || claims.length === 0) return null;
+
+  // Steps for the progress indicator
+  const STEPS = [
+    { icon: CircleDot, label: "Initiated" },
+    { icon: CheckCheck, label: "Approved" },
+    { icon: Banknote, label: "Paid" },
+  ];
+
+  return (
+    <motion.div
+      className="mb-6"
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.08 }}
+    >
+      <div className="space-y-3">
+        {claims.map((claim) => {
+          const meta = TRIGGER_META[claim.triggerType] || {
+            icon: AlertTriangle,
+            color: "#888",
+            label: claim.triggerType,
+            message: "Trigger detected",
+          };
+          const Icon = meta.icon;
+          const sev = SEVERITY_CONFIG[claim.triggerSeverity] || SEVERITY_CONFIG.moderate;
+          const statusCfg = CLAIM_STATUS_CONFIG[claim.status] || CLAIM_STATUS_CONFIG.pending_fraud_check;
+          const payout = PAYOUT_RANGES[claim.triggerSeverity] || PAYOUT_RANGES.moderate;
+          const currentStep = statusCfg.step;
+
+          return (
+            <motion.div
+              key={claim.id}
+              className="rounded-2xl relative overflow-hidden"
+              style={{
+                background: "linear-gradient(135deg, rgba(108,92,231,0.08) 0%, rgba(168,85,247,0.06) 100%)",
+                border: "1px solid rgba(108,92,231,0.2)",
+              }}
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+            >
+              {/* Header stripe */}
+              <div
+                className="px-4 py-2.5 flex items-center gap-2"
+                style={{
+                  background: "linear-gradient(90deg, rgba(108,92,231,0.15) 0%, rgba(168,85,247,0.08) 100%)",
+                  borderBottom: "1px solid rgba(108,92,231,0.12)",
+                }}
+              >
+                <Zap className="w-3.5 h-3.5 text-[#6c5ce7]" />
+                <span className="text-xs font-semibold text-[#6c5ce7]">
+                  A claim has been automatically initiated for you
+                </span>
+              </div>
+
+              <div className="p-4">
+                {/* Trigger info row */}
+                <div className="flex items-center gap-3 mb-4">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ backgroundColor: `${meta.color}18` }}
+                  >
+                    <Icon className="w-5 h-5" style={{ color: meta.color }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold">{meta.label}</span>
+                      <span
+                        className="text-[9px] font-bold uppercase px-1.5 py-[1px] rounded-full"
+                        style={{ color: sev.color, backgroundColor: sev.bg }}
+                      >
+                        {sev.label}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Expected payout: <span className="font-semibold text-foreground">{payout.label}</span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Status step indicator */}
+                <div className="flex items-center gap-1">
+                  {STEPS.map((step, i) => {
+                    const StepIcon = step.icon;
+                    const isCompleted = i < currentStep;
+                    const isCurrent = i === currentStep - 1;
+                    const stepColor = isCompleted || isCurrent ? statusCfg.color : "#555";
+
+                    return (
+                      <React.Fragment key={step.label}>
+                        <div className="flex flex-col items-center gap-1 flex-1">
+                          <div
+                            className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
+                              isCurrent ? "ring-2 ring-offset-1 ring-offset-background" : ""
+                            }`}
+                            style={{
+                              backgroundColor: isCompleted || isCurrent ? `${stepColor}18` : "rgba(255,255,255,0.05)",
+                              borderColor: stepColor,
+                              ...(isCurrent ? { ringColor: stepColor } : {}),
+                            }}
+                          >
+                            <StepIcon
+                              className="w-3.5 h-3.5"
+                              style={{ color: isCompleted || isCurrent ? stepColor : "#666" }}
+                            />
+                          </div>
+                          <span
+                            className="text-[9px] font-medium"
+                            style={{ color: isCompleted || isCurrent ? stepColor : "#666" }}
+                          >
+                            {step.label}
+                          </span>
+                        </div>
+                        {i < STEPS.length - 1 && (
+                          <div
+                            className="h-[2px] flex-1 rounded-full -mt-4"
+                            style={{
+                              backgroundColor: i < currentStep - 1 ? stepColor : "rgba(255,255,255,0.08)",
+                            }}
+                          />
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+
+                {/* Current status badge */}
+                <div className="mt-3 flex items-center justify-between">
+                  <span
+                    className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                    style={{ color: statusCfg.color, backgroundColor: statusCfg.bg }}
+                  >
+                    <Clock className="w-3 h-3" />
+                    {statusCfg.label}
+                  </span>
+                  {claim.payoutAmount > 0 && (
+                    <span className="text-xs font-semibold text-foreground">
+                      ₹{claim.payoutAmount}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+    </motion.div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 //  MAIN DASHBOARD
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function WorkerDashboard() {
   const { userProfile } = useAuth();
   const workerZone = userProfile?.zone || "Koramangala";
+  const workerId = userProfile?.uid || "worker-demo-001";
   const workerName = userProfile?.name?.split(" ")[0] || "Arjun";
 
   // Determine greeting based on time of day
@@ -417,6 +685,9 @@ export default function WorkerDashboard() {
 
       {/* ═══  ACTIVE ALERTS (Live Firestore)  ═══ */}
       <ActiveAlerts zone={workerZone} />
+
+      {/* ═══  AUTO CLAIM CARD (Live Firestore)  ═══ */}
+      <AutoClaimCard workerId={workerId} />
 
       {/* Active Cover */}
       <motion.div
