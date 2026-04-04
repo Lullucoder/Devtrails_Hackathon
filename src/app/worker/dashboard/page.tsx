@@ -20,6 +20,8 @@ import Link from "next/link";
 import toast from "react-hot-toast";
 import { useWorkerTheme } from "../layout";
 
+import { useAuth } from "@/contexts/AuthContext";
+
 const triggers = [
   { icon: CloudRain, label: "Rain", status: "active", color: "#3b82f6" },
   { icon: Thermometer, label: "Heat", status: "normal", color: "#f97316" },
@@ -132,7 +134,7 @@ export default function WorkerDashboard() {
         <div>
           <p className="text-sm text-muted-foreground">Good evening,</p>
           <h1 className="text-xl font-bold" style={{ fontFamily: "var(--font-outfit)" }}>
-            Arjun 👋
+            {userProfile?.name || "Worker"} 👋
           </h1>
         </div>
         <button

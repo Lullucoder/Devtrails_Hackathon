@@ -67,7 +67,7 @@ export default function ProfilePage() {
     { icon: Wallet,    label: "UPI ID",        value: profileData.upiId },
   ];
 
-  const trustScore = typeof profileData.trustScore === "number" ? profileData.trustScore : 0.91;
+  const trustScore = typeof userProfile.trustScore === "number" ? userProfile.trustScore : 0;
 
   const aadhaarVerified   = (profileData as { aadhaar_verified?: boolean }).aadhaar_verified ?? false;
   const aadhaarMasked     = (profileData as { aadhaar_masked?: string }).aadhaar_masked;
