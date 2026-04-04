@@ -128,7 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         existingProfile = await getWorkerByUid(firebaseUser.uid);
 
         if (!existingProfile) {
-          // Create new workers document
+          // Create new workers document with minimal data
           const isAdmin = selectedRole === "admin";
 
           const newProfileData = {
@@ -142,7 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             weeklyEarningRange: "",
             upiId: "",
             role: selectedRole as UserRole,
-            isOnboarded: isAdmin,
+            isOnboarded: isAdmin, // Admins skip onboarding, workers need to complete it
             trustScore: 0.8,
             activePlan: null,
             claimsCount: 0,

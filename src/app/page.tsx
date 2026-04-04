@@ -78,8 +78,13 @@ export default function LandingPage() {
     if (user && userProfile) {
       if (role === "admin") {
         router.replace("/admin/dashboard");
-      } else {
-        router.replace("/worker/dashboard");
+      } else if (role === "worker") {
+        // Check if worker has completed onboarding
+        if (userProfile.isOnboarded) {
+          router.replace("/worker/dashboard");
+        } else {
+          router.replace("/onboarding");
+        }
       }
     }
   }, [user, userProfile, role, loading, router]);

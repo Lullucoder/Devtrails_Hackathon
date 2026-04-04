@@ -18,7 +18,7 @@ import { AadhaarVerification } from "@/components/onboarding/AadhaarVerification
 import type { AadhaarVerificationResult } from "@/components/onboarding/AadhaarVerification";
 import { FaceVerificationStep } from "@/components/onboarding/FaceVerificationStep";
 import type { FaceVerificationResult } from "@/components/onboarding/FaceVerificationStep";
-import { createWorker } from "@/lib/firestore";
+import { updateWorker } from "@/lib/firestore";
 import { useAuth } from "@/contexts/AuthContext";
 import toast from "react-hot-toast";
 
@@ -399,8 +399,8 @@ export default function OnboardingPage() {
   const [faceResult, setFaceResult] = useState<FaceVerificationResult | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
-  // Deterministic demo uid — in production, read from the authenticated session
-  const workerUid = `worker-${Date.now()}`;
+  // Use the authenticated user's UID from Firebase Auth
+  const workerUid = user?.uid || `worker-${Date.now()}`;
 
   const handleAadhaarSuccess = useCallback((result: AadhaarVerificationResult) => {
     setAadhaarResult(result);
@@ -432,13 +432,8 @@ export default function OnboardingPage() {
         kycFields.aadhaar_verified = false;
       }
 
-      await createWorker({
-        uid:                workerUid,
-        phone:
-              (user as { providerData?: Array<{ phoneNumber?: string | null }> } | null)
-                ?.providerData?.[0]?.phoneNumber ||
-              userProfile?.phone ||
-              "",
+      // Update the existing worker document (created during auth) instead of creating new
+      await updateWorker(workerUid, {
         name:               personal.name,
         city:               personal.city,
         platform:           personal.platform,
@@ -446,13 +441,8 @@ export default function OnboardingPage() {
         workingHours:       work.workingHours,
         weeklyEarningRange: work.weeklyEarningRange,
         upiId:              work.upiId,
-        role:               "worker",
         isOnboarded:        true,
         trustScore:         aadhaarResult?.verified ? 0.85 : 0.75,
-        activePlan:         null,
-        claimsCount:        0,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        joinedDate:         serverTimestamp() as any,
         // ── Face liveness fields ──
         face_verified:        true,
         face_image_r2_key:    face.r2Key,
@@ -464,7 +454,11 @@ export default function OnboardingPage() {
 
       setSubmitSuccess(true);
       toast.success("Onboarding complete! Welcome to RoziRakshak AI.");
-      setTimeout(() => router.push("/worker/dashboard"), 1800);
+      
+      // Reload the page to trigger AuthContext to refetch the updated profile
+      setTimeout(() => {
+        window.location.href = "/worker/dashboard";
+      }, 1800);
     } catch (err) {
       console.error("Onboarding submit error:", err);
       toast.error("Something went wrong. Please try again.");

@@ -135,6 +135,9 @@ export function LoginModal({ isOpen, onOpenChange }: LoginModalProps) {
       }
       toast.success("Login successful!");
       onOpenChange(false);
+      
+      // Redirect based on role and onboarding status
+      // The page.tsx will handle the actual redirect via useEffect
     } catch (error) {
       if (error instanceof AuthError) {
         switch (error.code) {
