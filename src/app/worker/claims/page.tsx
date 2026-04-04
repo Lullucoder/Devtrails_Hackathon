@@ -18,6 +18,27 @@ import { useAuth } from "@/contexts/AuthContext";
 
 // ─── Static data ──────────────────────────────────────────────────────────────
 
+// Types
+interface Claim {
+  id: string;
+  workerId: string;
+  workerName: string;
+  triggerType: string;
+  triggerSeverity: string;
+  status: string;
+  zone: string;
+  city: string;
+  description: string;
+  confidenceScore?: number;
+  payoutAmount?: number;
+  holdReason?: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  resolvedAt?: Timestamp;
+  paidAt?: Timestamp;
+}
+
+// Icon mapping
 const iconMap: Record<string, React.ElementType> = {
   heavy_rain: CloudRain,
   extreme_heat: Thermometer,

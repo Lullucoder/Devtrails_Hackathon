@@ -1,9 +1,10 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { LayoutDashboard, FileText, History, UserCircle } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { LayoutDashboard, FileText, History, UserCircle, Loader2 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
   { href: "/worker/dashboard", icon: LayoutDashboard, label: "Home" },
@@ -14,6 +15,39 @@ const navItems = [
 
 export default function WorkerLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, userProfile, role, isOnboarded, loading } = useAuth();
+
+  useEffect(() => {
+    if (loading) return;
+
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+
+    if (user && role === "admin") {
+      router.replace("/admin/dashboard");
+      return;
+    }
+
+    if (user && !isOnboarded) {
+      router.replace("/onboarding");
+      return;
+    }
+  }, [user, role, isOnboarded, loading, router]);
+
+  // Show full-screen spinner while loading or redirecting
+  if (loading || !user || role === "admin" || !isOnboarded) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          <p className="text-sm text-muted-foreground animate-pulse">Loading…</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">

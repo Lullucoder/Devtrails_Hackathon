@@ -1,0 +1,8 @@
+{
+  "version": "v1",
+  "trained_at": "2026-04-04T16:31:56.619698",
+  "n_samples": 500,
+  "n_features": 16,
+  "contamination": 0.05,
+  "n_estimators": 100
+}
