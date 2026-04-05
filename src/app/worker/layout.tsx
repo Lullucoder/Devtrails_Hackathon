@@ -2,9 +2,8 @@
 
 import React, { useEffect, useRef, createContext, useContext, useState, useCallback } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, FileText, History, UserCircle, Loader2 } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
+import { usePathname } from "next/navigation";
+import { LayoutDashboard, FileText, History, UserCircle } from "lucide-react";
 
 // ─ Theme context — consumed by profile page to render toggle ─────────────────
 type WorkerTheme = "light" | "dark";
@@ -37,15 +36,13 @@ export default function WorkerLayout({ children }: { children: React.ReactNode }
 
   // Read worker theme preference from localStorage (default: "light")
   // Worker portals should be readable in outdoor sunlight — default to light
-  const [theme, setThemeState] = useState<WorkerTheme>("light");
+  const [theme, setThemeState] = useState<WorkerTheme>(() => {
+    if (typeof window === "undefined") return "light";
+    const stored = localStorage.getItem("worker-theme");
+    return stored === "dark" ? "dark" : "light";
+  });
 
-  useEffect(() => {
-    const stored = (localStorage.getItem("worker-theme") ?? "light") as WorkerTheme;
-    setThemeState(stored);
-    applyTheme(stored);
-  }, []);
-
-  const applyTheme = (t: WorkerTheme) => {
+  const applyTheme = useCallback((t: WorkerTheme) => {
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
     if (t === "dark") {
@@ -55,13 +52,17 @@ export default function WorkerLayout({ children }: { children: React.ReactNode }
       wrapper.classList.remove("dark");
       wrapper.classList.add("light");
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    applyTheme(theme);
+  }, [applyTheme, theme]);
 
   const setTheme = useCallback((t: WorkerTheme) => {
     setThemeState(t);
     localStorage.setItem("worker-theme", t);
     applyTheme(t);
-  }, []);
+  }, [applyTheme]);
 
   return (
     <WorkerThemeContext.Provider value={{ theme, setTheme }}>

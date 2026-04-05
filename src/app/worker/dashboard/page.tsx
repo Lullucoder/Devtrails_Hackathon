@@ -17,7 +17,6 @@ import {
   CheckCircle2,
   Loader2,
   Zap,
-  FileText,
   Clock,
   CircleDot,
   CheckCheck,
@@ -26,6 +25,8 @@ import {
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { getActivePolicyByWorker, getClaimsByWorker } from "@/lib/firestore";
+import type { Claim, Policy } from "@/types";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -213,6 +214,17 @@ function getAlertMessage(alert: TriggerAlertDoc): string {
   return meta.message + suffix;
 }
 
+function formatShortDate(ts: Timestamp | string | null | undefined): string {
+  const d = resolveDate(ts);
+  if (!d) return "—";
+  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+}
+
+function formatPlanName(plan: string | undefined): string {
+  if (!plan) return "No Active Plan";
+  return `${plan.charAt(0).toUpperCase()}${plan.slice(1)} Plan`;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 //  STATIC DATA (kept from original dashboard)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -225,27 +237,11 @@ const triggers = [
   { icon: Wifi, label: "Platform", status: "normal", color: "#06b6d4" },
 ];
 
-const recentClaims = [
-  {
-    id: "cl_001",
-    type: "Heavy Rain",
-    date: "18 Mar",
-    amount: 750,
-    status: "auto_approved",
-  },
-  {
-    id: "cl_004",
-    type: "Platform Outage",
-    date: "19 Mar",
-    amount: 500,
-    status: "auto_approved",
-  },
-];
-
 const statusLabel: Record<string, string> = {
   auto_approved: "Auto Approved",
   under_review: "Under Review",
   approved: "Approved",
+  paid: "Paid",
   held: "Held",
   denied: "Denied",
 };
@@ -254,6 +250,7 @@ const statusClass: Record<string, string> = {
   auto_approved: "status-approved",
   under_review: "status-reviewing",
   approved: "status-approved",
+  paid: "status-approved",
   held: "status-held",
   denied: "status-denied",
 };
@@ -263,14 +260,10 @@ const statusClass: Record<string, string> = {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function ActiveAlerts({ zone }: { zone: string }) {
-  const [alerts, setAlerts] = useState<TriggerAlertDoc[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [alerts, setAlerts] = useState<TriggerAlertDoc[] | null>(null);
 
   useEffect(() => {
-    if (!zone) {
-      setLoading(false);
-      return;
-    }
+    if (!zone) return;
 
     // 24 hours ago
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -294,19 +287,52 @@ function ActiveAlerts({ zone }: { zone: string }) {
           }
         });
         setAlerts(docs);
-        setLoading(false);
       },
       (err) => {
         console.error("ActiveAlerts listener error:", err);
-        setLoading(false);
+        setAlerts([]);
       }
     );
 
     return () => unsub();
   }, [zone]);
 
+  if (!zone) {
+    return (
+      <motion.div
+        className="mb-6"
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05 }}
+      >
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+          Active Alerts
+        </h2>
+        <div
+          className="glass rounded-2xl p-5 flex items-center gap-3"
+          style={{ border: "1px solid rgba(245,158,11,0.2)" }}
+        >
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ backgroundColor: "rgba(245,158,11,0.12)" }}
+          >
+            <AlertTriangle className="w-5 h-5" style={{ color: "#f59e0b" }} />
+          </div>
+          <div>
+            <p className="text-sm font-semibold" style={{ color: "#f59e0b" }}>
+              Zone not set
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Complete your profile to receive zone-specific trigger alerts
+            </p>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
   // ── Loading State ──
-  if (loading) {
+  if (alerts === null) {
     return (
       <div className="mb-6">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
@@ -463,14 +489,10 @@ function ActiveAlerts({ zone }: { zone: string }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function AutoClaimCard({ workerId }: { workerId: string }) {
-  const [claims, setClaims] = useState<AutoClaimDoc[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [claims, setClaims] = useState<AutoClaimDoc[] | null>(null);
 
   useEffect(() => {
-    if (!workerId) {
-      setLoading(false);
-      return;
-    }
+    if (!workerId) return;
 
     const q = query(
       collection(db, "claims"),
@@ -488,18 +510,17 @@ function AutoClaimCard({ workerId }: { workerId: string }) {
           ...d.data(),
         })) as AutoClaimDoc[];
         setClaims(docs);
-        setLoading(false);
       },
       (err) => {
         console.error("AutoClaimCard listener error:", err);
-        setLoading(false);
+        setClaims([]);
       }
     );
 
     return () => unsub();
   }, [workerId]);
 
-  if (loading || claims.length === 0) return null;
+  if (!workerId || claims === null || claims.length === 0) return null;
 
   // Steps for the progress indicator
   const STEPS = [
@@ -653,10 +674,74 @@ function AutoClaimCard({ workerId }: { workerId: string }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function WorkerDashboard() {
-  const { userProfile } = useAuth();
-  const workerZone = userProfile?.zone || "Koramangala";
-  const workerId = userProfile?.uid || "worker-demo-001";
-  const workerName = userProfile?.name?.split(" ")[0] || "Arjun";
+  const { user, userProfile } = useAuth();
+  const workerZone = userProfile?.zone || "";
+  const workerId = user?.uid || userProfile?.uid || "";
+  const workerName = userProfile?.name?.split(" ")[0] || "Worker";
+
+  const [activePolicy, setActivePolicy] = useState<Policy | null | undefined>(undefined);
+  const [claims, setClaims] = useState<Claim[] | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!workerId) return;
+
+    const loadSummary = async () => {
+      try {
+        const [policy, workerClaims] = await Promise.all([
+          getActivePolicyByWorker(workerId),
+          getClaimsByWorker(workerId),
+        ]);
+
+        if (cancelled) return;
+
+        const sortedClaims = [...workerClaims].sort((a, b) => {
+          const aTime = resolveDate(a.createdAt)?.getTime() ?? 0;
+          const bTime = resolveDate(b.createdAt)?.getTime() ?? 0;
+          return bTime - aTime;
+        });
+
+        setActivePolicy(policy);
+        setClaims(sortedClaims);
+      } catch (error) {
+        if (cancelled) return;
+        console.error("Dashboard data load failed:", error);
+        toast.error("Could not load live dashboard data.");
+        setActivePolicy(null);
+        setClaims([]);
+      }
+    };
+
+    void loadSummary();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [workerId]);
+
+  const claimList = claims ?? [];
+  const summaryLoading = Boolean(workerId) && (activePolicy === undefined || claims === undefined);
+
+  const recentClaims = claimList.slice(0, 2).map((claim) => ({
+    id: claim.id,
+    type: TRIGGER_META[claim.triggerType]?.label || claim.triggerType,
+    date: formatShortDate(claim.createdAt),
+    amount: claim.payoutAmount || 0,
+    status: claim.status,
+  }));
+
+  const totalProtected = claimList
+    .filter((claim) => (claim.payoutAmount || 0) > 0)
+    .reduce((sum, claim) => sum + (claim.payoutAmount || 0), 0);
+
+  const autoApprovedCount = claimList.filter(
+    (claim) => claim.status === "auto_approved" || claim.status === "approved" || claim.status === "paid"
+  ).length;
+
+  const coverAmount = activePolicy?.maxProtection ?? 0;
+  const coverPremium = activePolicy?.premium ?? 0;
+  const coverExpiry = activePolicy ? formatShortDate(activePolicy.weekEnd) : "—";
 
   // Determine greeting based on time of day
   const hour = new Date().getHours();
@@ -699,14 +784,16 @@ export default function WorkerDashboard() {
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-3">
             <Shield className="w-5 h-5 text-white/80" />
-            <span className="text-sm text-white/80 font-medium">Active Cover — Core Plan</span>
+            <span className="text-sm text-white/80 font-medium">
+              Active Cover — {formatPlanName(activePolicy?.plan)}
+            </span>
           </div>
-          <p className="text-3xl font-bold text-white mb-1">₹1,500</p>
+          <p className="text-3xl font-bold text-white mb-1">₹{coverAmount}</p>
           <p className="text-sm text-white/70">Max weekly protection</p>
           <div className="flex items-center gap-4 mt-4 text-sm text-white/80">
-            <span>Premium: ₹39</span>
+            <span>Premium: ₹{coverPremium}</span>
             <span>•</span>
-            <span>Expires: 23 Mar</span>
+            <span>Expires: {coverExpiry}</span>
           </div>
         </div>
       </motion.div>
@@ -755,9 +842,11 @@ export default function WorkerDashboard() {
         </div>
         <div className="flex items-baseline gap-1">
           <IndianRupee className="w-5 h-5 text-foreground" />
-          <span className="text-2xl font-bold text-foreground">1,250</span>
+          <span className="text-2xl font-bold text-foreground">{totalProtected}</span>
         </div>
-        <p className="text-xs text-muted-foreground mt-1">2 claims auto-approved</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          {summaryLoading ? "Loading claims..." : `${autoApprovedCount} claims auto-approved`}
+        </p>
       </motion.div>
 
       {/* Recent Claims */}
@@ -771,6 +860,9 @@ export default function WorkerDashboard() {
           </Link>
         </div>
         <div className="space-y-2">
+          {!summaryLoading && recentClaims.length === 0 && (
+            <div className="glass rounded-xl p-4 text-sm text-muted-foreground">No claims yet.</div>
+          )}
           {recentClaims.map((claim) => (
             <motion.div
               key={claim.id}
@@ -785,9 +877,9 @@ export default function WorkerDashboard() {
               <div className="text-right">
                 <p className="font-semibold text-sm text-foreground">+₹{claim.amount}</p>
                 <span
-                  className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${statusClass[claim.status]}`}
+                  className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${statusClass[claim.status] || "status-reviewing"}`}
                 >
-                  {statusLabel[claim.status]}
+                  {statusLabel[claim.status] || claim.status}
                 </span>
               </div>
             </motion.div>

@@ -20,6 +20,7 @@ import { auth } from "@/lib/firebase";
 export function useRecaptcha() {
   const recaptchaRef = useRef<HTMLDivElement | null>(null);
   const verifierRef = useRef<RecaptchaVerifier | null>(null);
+  const [verifier, setVerifier] = useState<RecaptchaVerifier | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,6 +57,7 @@ export function useRecaptcha() {
       });
 
       verifierRef.current = rv;
+      setVerifier(rv);
       
       // Render the reCAPTCHA widget
       rv.render().then(() => {
@@ -81,6 +83,7 @@ export function useRecaptcha() {
         console.error("reCAPTCHA cleanup error:", err);
       }
       verifierRef.current = null;
+      setVerifier(null);
       setIsReady(false);
       setError(null);
     };
@@ -102,7 +105,7 @@ export function useRecaptcha() {
     /** Attach this ref to an empty `<div>` that acts as the reCAPTCHA container. */
     recaptchaRef,
     /** The RecaptchaVerifier instance, or `null` before initialisation. */
-    verifier: verifierRef.current,
+    verifier,
     /** `true` once the verifier has been created and is usable. */
     isReady,
     /** Error message if reCAPTCHA failed to load */
