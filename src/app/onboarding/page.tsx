@@ -418,7 +418,13 @@ export default function OnboardingPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aadhaarResult, personal, work]);
 
-  async function handleFinalSubmit(face: FaceVerificationResult) {
+  const handleFaceSkip = useCallback(() => {
+    setFaceResult(null);
+    handleFinalSubmit(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aadhaarResult, personal, work]);
+
+  async function handleFinalSubmit(face: FaceVerificationResult | null) {
     setStep("submitting");
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -432,6 +438,21 @@ export default function OnboardingPage() {
         kycFields.aadhaar_verified = false;
       }
 
+      // ── Face liveness fields ──
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const faceFields: Record<string, any> = {};
+      if (face) {
+        faceFields.face_verified          = true;
+        faceFields.face_image_storage_key = face.r2Key;
+        faceFields.face_image_r2_key      = face.r2Key;
+        faceFields.face_verified_at       = serverTimestamp();
+        faceFields.liveness_check_passed  = true;
+      } else {
+        faceFields.face_verified          = false;
+        faceFields.liveness_check_passed  = false;
+        faceFields.kyc_skipped            = true;
+      }
+
       // Update the existing worker document (created during auth) instead of creating new
       await updateWorker(workerUid, {
         name:               personal.name,
@@ -443,13 +464,7 @@ export default function OnboardingPage() {
         upiId:              work.upiId,
         isOnboarded:        true,
         trustScore:         aadhaarResult?.verified ? 0.85 : 0.75,
-        // ── Face liveness fields ──
-        face_verified:        true,
-        face_image_storage_key: face.r2Key,
-        face_image_r2_key:    face.r2Key,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        face_verified_at:     serverTimestamp() as any,
-        liveness_check_passed: true,
+        ...faceFields,
         ...kycFields,
       });
 
@@ -521,12 +536,20 @@ export default function OnboardingPage() {
         )}
 
         {step === "face" && (
-          <FaceVerificationStep
-            key="face"
-            workerUid={workerUid}
-            onVerified={handleFaceVerified}
-            onBack={() => setStep("work")}
-          />
+          <div key="face" className="w-full max-w-md flex flex-col items-center">
+            <FaceVerificationStep
+              workerUid={workerUid}
+              onVerified={handleFaceVerified}
+              onBack={() => setStep("work")}
+            />
+            <button
+              id="skip-kyc-btn"
+              onClick={handleFaceSkip}
+              className="mt-4 text-sm text-muted-foreground hover:text-foreground underline underline-offset-4 transition-colors"
+            >
+              Skip Face KYC for now →
+            </button>
+          </div>
         )}
 
         {step === "submitting" && (

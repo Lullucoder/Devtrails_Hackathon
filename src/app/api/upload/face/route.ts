@@ -233,6 +233,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       presignedUrl: upload.secureUrl,
     });
   } catch (err) {
+    console.error("[api/upload/face] POST error:", err);
     const message = err instanceof Error ? err.message : "Unknown error";
     return Response.json({ error: message }, { status: 500 });
   }
