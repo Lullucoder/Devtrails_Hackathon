@@ -33,8 +33,14 @@ interface LoginModalProps {
 
 export function LoginModal({ isOpen, onOpenChange }: LoginModalProps) {
   const { verifyOtp } = useAuth();
-  const { recaptchaRef, verifier, isReady, error: recaptchaError, resetVerifier } = useRecaptcha();
   const useMockAuth = isMockAuthEnabled();
+  const {
+    recaptchaRef,
+    verifier,
+    isReady,
+    error: recaptchaError,
+    resetVerifier,
+  } = useRecaptcha();
 
   const [step, setStep] = useState<Step>("phone");
   const [selectedRole, setSelectedRole] = useState<Role>("worker");
@@ -280,7 +286,10 @@ export function LoginModal({ isOpen, onOpenChange }: LoginModalProps) {
 
           {/* reCAPTCHA container - invisible, hidden from view */}
           {!useMockAuth && (
-            <div className="hidden">
+            <div
+              className="absolute -left-[9999px] top-0 w-px h-px overflow-hidden pointer-events-none"
+              aria-hidden="true"
+            >
               <div id="recaptcha-container" ref={recaptchaRef} />
             </div>
           )}
@@ -291,6 +300,15 @@ export function LoginModal({ isOpen, onOpenChange }: LoginModalProps) {
               <p className="text-xs text-destructive text-center">
                 {recaptchaError}
               </p>
+              <div className="mt-2 flex justify-center">
+                <button
+                  type="button"
+                  onClick={resetVerifier}
+                  className="text-xs text-destructive underline underline-offset-2 hover:opacity-80"
+                >
+                  Retry reCAPTCHA
+                </button>
+              </div>
             </div>
           )}
 

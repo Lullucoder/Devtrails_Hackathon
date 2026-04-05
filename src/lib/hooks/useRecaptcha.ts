@@ -18,18 +18,32 @@ import { auth } from "@/lib/firebase";
  * - `isReady`      — true once the verifier has been initialised
  */
 export function useRecaptcha() {
-  const recaptchaRef = useRef<HTMLDivElement | null>(null);
   const verifierRef = useRef<RecaptchaVerifier | null>(null);
+  const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
+  const recaptchaRef = useCallback((node: HTMLDivElement | null) => {
+    setContainerEl(node);
+  }, []);
   const [verifier, setVerifier] = useState<RecaptchaVerifier | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ── Initialise on mount ───────────────────────────────────────────────
-  useEffect(() => {
-    const el = recaptchaRef.current;
-    if (!el) return;
+  const clearVerifierInstance = useCallback(() => {
+    try {
+      verifierRef.current?.clear();
+    } catch (err) {
+      console.error("reCAPTCHA cleanup error:", err);
+    }
 
-    // Prevent double-init during React Strict Mode double-mount
+    verifierRef.current = null;
+  }, []);
+
+  const resetState = useCallback(() => {
+    setVerifier(null);
+    setIsReady(false);
+    setError(null);
+  }, []);
+
+  const initializeVerifier = useCallback((el: HTMLDivElement) => {
     if (verifierRef.current) return;
 
     try {
@@ -41,14 +55,16 @@ export function useRecaptcha() {
           setError(null);
         },
         "expired-callback": () => {
-          // Token expired before being used — reset so a fresh one is generated.
           setIsReady(false);
-          rv.render().then(() => {
-            setIsReady(true);
-          }).catch((err) => {
-            console.error("reCAPTCHA render error:", err);
-            setError("Failed to load reCAPTCHA. Please refresh the page.");
-          });
+          rv
+            .render()
+            .then(() => {
+              setIsReady(true);
+            })
+            .catch((err) => {
+              console.error("reCAPTCHA render error:", err);
+              setError("Failed to load reCAPTCHA. Please refresh the page.");
+            });
         },
         "error-callback": () => {
           setError("reCAPTCHA error. Please refresh the page.");
@@ -58,36 +74,55 @@ export function useRecaptcha() {
 
       verifierRef.current = rv;
       setVerifier(rv);
-      
-      // Render the reCAPTCHA widget
-      rv.render().then(() => {
-        setIsReady(true);
-        setError(null);
-      }).catch((err) => {
-        console.error("reCAPTCHA initialization error:", err);
-        setError("Failed to load reCAPTCHA. Please check your internet connection and refresh.");
-        setIsReady(false);
-      });
 
+      rv
+        .render()
+        .then(() => {
+          setIsReady(true);
+          setError(null);
+        })
+        .catch((err) => {
+          console.error("reCAPTCHA initialization error:", err);
+          setError(
+            "Failed to load reCAPTCHA. Please check your internet connection and refresh."
+          );
+          setIsReady(false);
+        });
     } catch (err) {
       console.error("reCAPTCHA setup error:", err);
       setError("Failed to initialize reCAPTCHA. Please refresh the page.");
       setIsReady(false);
     }
-
-    // ── Cleanup on unmount ────────────────────────────────────────────
-    return () => {
-      try {
-        verifierRef.current?.clear();
-      } catch (err) {
-        console.error("reCAPTCHA cleanup error:", err);
-      }
-      verifierRef.current = null;
-      setVerifier(null);
-      setIsReady(false);
-      setError(null);
-    };
   }, []);
+
+  // Initialise only when container actually mounts (dialog open).
+  useEffect(() => {
+    if (!containerEl) {
+      clearVerifierInstance();
+
+      // Reset UI state asynchronously to avoid sync setState-in-effect warnings.
+      const timer = window.setTimeout(() => {
+        resetState();
+      }, 0);
+
+      return () => window.clearTimeout(timer);
+    }
+
+    if (!verifierRef.current) {
+      const timer = window.setTimeout(() => {
+        initializeVerifier(containerEl);
+      }, 0);
+
+      return () => {
+        window.clearTimeout(timer);
+        clearVerifierInstance();
+      };
+    }
+
+    return () => {
+      clearVerifierInstance();
+    };
+  }, [containerEl, clearVerifierInstance, initializeVerifier, resetState]);
 
   /**
    * Force-reset the verifier (useful after a failed attempt so the
@@ -98,8 +133,13 @@ export function useRecaptcha() {
       verifierRef.current.render().catch((err) => {
         console.error("reCAPTCHA reset error:", err);
       });
+      return;
     }
-  }, []);
+
+    if (containerEl) {
+      initializeVerifier(containerEl);
+    }
+  }, [containerEl, initializeVerifier]);
 
   return {
     /** Attach this ref to an empty `<div>` that acts as the reCAPTCHA container. */
