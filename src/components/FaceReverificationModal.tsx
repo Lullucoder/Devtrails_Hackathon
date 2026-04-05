@@ -20,7 +20,7 @@ interface FaceReverificationModalProps {
   onClose: () => void;
   /** The claim document ID to update. */
   claimId: string;
-  /** Worker's UID (used to fetch their stored face from R2). */
+  /** Worker's UID (used to fetch their stored onboarding face photo). */
   uid: string;
   /** Existing confidence score on the claim (0–1). */
   currentConfidenceScore: number;
@@ -195,7 +195,7 @@ export default function FaceReverificationModal({
           );
         }
 
-        // ── a. Fetch stored onboarding face from R2 via our API ────────────
+        // ── a. Fetch stored onboarding face from storage via our API ───────
         const faceUrlRes = await fetch("/api/upload/face", {
           method: "GET",
           headers: { "x-worker-uid": uid },

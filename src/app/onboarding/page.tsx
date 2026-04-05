@@ -445,6 +445,7 @@ export default function OnboardingPage() {
         trustScore:         aadhaarResult?.verified ? 0.85 : 0.75,
         // ── Face liveness fields ──
         face_verified:        true,
+        face_image_storage_key: face.r2Key,
         face_image_r2_key:    face.r2Key,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         face_verified_at:     serverTimestamp() as any,

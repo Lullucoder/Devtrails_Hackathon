@@ -48,7 +48,7 @@ const fraudAlerts = [
     face: {
       face_reverified: true,
       face_similarity_score: 0.87,
-      // In a real app these would be freshly-generated presigned R2 URLs:
+      // In a real app these would be freshly-generated storage URLs:
       stored_face_url: undefined,
       new_face_url: undefined,
     } as FaceReverification,

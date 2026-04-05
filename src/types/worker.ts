@@ -87,7 +87,10 @@ export interface WorkerProfile extends BaseDocument {
   /** Whether the real-time liveness check was passed during onboarding. */
   face_verified?: boolean;
 
-  /** R2 object key for the captured face photo, e.g. "faces/{uid}.jpg". */
+  /** Storage object key/public ID for the captured face photo, e.g. "faces/{uid}". */
+  face_image_storage_key?: string;
+
+  /** Legacy field kept for backward compatibility with older deployments. */
   face_image_r2_key?: string;
 
   /** Timestamp when liveness check was completed. */

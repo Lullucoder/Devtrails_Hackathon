@@ -125,7 +125,7 @@ function FacePhotoModal({ uid, onClose }: { uid: string; onClose: () => void }) 
             )}
             {!loading && error && (
               <p className="text-sm text-muted-foreground text-center px-8">
-                Photo not available or R2 credentials not configured.
+                Photo not available or Cloudinary credentials not configured.
               </p>
             )}
             {!loading && photoUrl && (
@@ -141,7 +141,7 @@ function FacePhotoModal({ uid, onClose }: { uid: string; onClose: () => void }) 
           </div>
 
           <div className="px-5 py-3 text-[10px] text-muted-foreground">
-            Liveness-verified face photo · Stored in Cloudflare R2
+            Liveness-verified face photo · Stored in Cloudinary
           </div>
         </motion.div>
       </motion.div>

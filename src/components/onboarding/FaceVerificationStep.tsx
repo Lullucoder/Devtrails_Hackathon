@@ -14,7 +14,7 @@ import FaceLivenessCheck from "./FaceLivenessCheck";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface FaceVerificationResult {
-  /** The R2 object key, e.g. "faces/{uid}.jpg" */
+  /** Storage object key / public ID, e.g. "faces/{uid}" */
   r2Key: string;
 }
 
@@ -40,41 +40,64 @@ export function FaceVerificationStep({
   const [phase, setPhase] = useState<Phase>("liveness");
   const [r2Key, setR2Key]       = useState<string>("");
   const [errorMsg, setErrorMsg] = useState<string>("");
+  const [usedDevStorage, setUsedDevStorage] = useState(false);
   const [retryKey, setRetryKey] = useState(0); // remount FaceLivenessCheck on retry
 
   const handleLivenessSuccess = useCallback(async (blob: Blob) => {
     setPhase("uploading");
     try {
-      // 1. Get presigned PUT URL from our API route
+      // Upload face image to storage via server API.
       const res = await fetch("/api/upload/face", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "image/jpeg",
           "x-worker-uid": workerUid,
         },
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? `HTTP ${res.status}`);
-      }
-
-      const { presignedUrl, key } = (await res.json()) as {
-        presignedUrl: string;
-        key: string;
-      };
-
-      // 2. Upload the blob directly to R2 from the browser
-      const putRes = await fetch(presignedUrl, {
-        method: "PUT",
-        headers: { "Content-Type": "image/jpeg" },
         body: blob,
       });
 
-      if (!putRes.ok) {
-        throw new Error(`R2 upload failed: HTTP ${putRes.status}`);
+      const body = (await res.json().catch(() => ({}))) as {
+        code?: string;
+        error?: string;
+        missing?: string[];
+        presignedUrl?: string;
+        secureUrl?: string;
+        key?: string;
+      };
+
+      if (!res.ok) {
+        const missing = Array.isArray(body.missing) ? body.missing : [];
+        const isStorageMissing =
+          body.code === "CLOUDINARY_ENV_MISSING" ||
+          /Missing Cloudinary configuration|Missing environment variable: CLOUDINARY_/i.test(
+            body.error ?? ""
+          );
+
+        if (isStorageMissing && process.env.NODE_ENV !== "production") {
+          // Local dev fallback: allow onboarding to continue without blocking on storage setup.
+          setUsedDevStorage(true);
+          setR2Key(`faces/dev/${workerUid}`);
+          setPhase("confirmed");
+          return;
+        }
+
+        if (isStorageMissing) {
+          throw new Error(
+            `Cloudinary storage is not configured. Missing: ${
+              missing.length > 0 ? missing.join(", ") : "Cloudinary environment variables"
+            }`
+          );
+        }
+
+        throw new Error(body.error ?? `HTTP ${res.status}`);
       }
 
+      const { key } = body;
+      if (!key) {
+        throw new Error("Upload API returned an invalid response.");
+      }
+
+      setUsedDevStorage(false);
       setR2Key(key);
       setPhase("confirmed");
     } catch (err) {
@@ -91,6 +114,7 @@ export function FaceVerificationStep({
 
   const handleRetry = useCallback(() => {
     setErrorMsg("");
+    setUsedDevStorage(false);
     setRetryKey((k) => k + 1);
     setPhase("liveness");
   }, []);
@@ -219,7 +243,9 @@ export function FaceVerificationStep({
               Face Verified ✓
             </h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Liveness check passed. Your face photo has been securely stored.
+              {usedDevStorage
+                ? "Liveness check passed. Running in local dev mode without Cloudinary upload."
+                : "Liveness check passed. Your face photo has been securely stored."}
             </p>
           </motion.div>
 

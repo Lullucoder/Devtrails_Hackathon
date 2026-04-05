@@ -1,180 +1,162 @@
 /**
  * POST /api/upload/face
- *   Returns a presigned R2 PUT URL for uploading the worker's face photo.
+ *   Uploads the worker face photo to Cloudinary.
  *   The x-worker-uid request header identifies the worker.
  *
  * GET /api/upload/face?uid={uid}
- *   Returns a presigned R2 GET URL so admins can view the stored face photo.
+ *   Returns the Cloudinary image URL for the worker face photo.
  *
  * Auth: reads uid from header (POST) or query param (GET).
  * In production you'd verify a real session cookie.
  */
 
 import { NextRequest } from "next/server";
-import crypto from "crypto";
+import { v2 as cloudinary } from "cloudinary";
+
+export const runtime = "nodejs";
 
 // ── Env helpers ───────────────────────────────────────────────────────────────
 
-function requireEnv(name: string): string {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing environment variable: ${name}`);
-  return v;
-}
+type CloudinaryEnv = {
+  cloudName: string;
+  apiKey: string;
+  apiSecret: string;
+};
 
-// ── AWS4 presigned URL (manual, no SDK) ──────────────────────────────────────
-// Cloudflare R2 is S3-compatible, so we use the S3 presign algorithm.
+function getCloudinaryEnv(): { values: CloudinaryEnv | null; missing: string[] } {
+  const cloudName =
+    process.env.CLOUDINARY_CLOUD_NAME || process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
 
-function hmacBuf(key: Buffer | string, data: string): Buffer {
-  return crypto.createHmac("sha256", key).update(data, "utf8").digest();
-}
+  const missing: string[] = [];
+  if (!cloudName) {
+    missing.push("CLOUDINARY_CLOUD_NAME or NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME");
+  }
+  if (!process.env.CLOUDINARY_API_KEY) {
+    missing.push("CLOUDINARY_API_KEY");
+  }
+  if (!process.env.CLOUDINARY_API_SECRET) {
+    missing.push("CLOUDINARY_API_SECRET");
+  }
 
-function hmacHex(key: Buffer | string, data: string): string {
-  return crypto.createHmac("sha256", key).update(data, "utf8").digest("hex");
-}
+  if (missing.length > 0) {
+    return { values: null, missing };
+  }
 
-function getSigningKey(
-  secretKey: string,
-  dateStamp: string,
-  region: string,
-  service: string
-): Buffer {
-  const kDate    = hmacBuf("AWS4" + secretKey, dateStamp);
-  const kRegion  = hmacBuf(kDate, region);
-  const kService = hmacBuf(kRegion, service);
-  const kSigning = hmacBuf(kService, "aws4_request");
-  return kSigning;
-}
-
-interface PresignParams {
-  accountId: string;
-  accessKeyId: string;
-  secretAccessKey: string;
-  bucketName: string;
-  key: string;
-  method: "PUT" | "GET";
-  region?: string;
-  expiresIn?: number;
-  /** Only required for PUT */
-  contentType?: string;
-}
-
-function buildPresignedUrl({
-  accountId,
-  accessKeyId,
-  secretAccessKey,
-  bucketName,
-  key,
-  method,
-  region = "auto",
-  expiresIn = 300,
-  contentType,
-}: PresignParams): string {
-  const service = "s3";
-  const host = `${accountId}.r2.cloudflarestorage.com`;
-  const endpoint = `https://${host}/${bucketName}/${key}`;
-
-  const now = new Date();
-  // Format: 20060102T150405Z
-  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "").slice(0, 15) + "Z";
-  const dateStamp = amzDate.slice(0, 8);
-
-  const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
-  const credential = `${accessKeyId}/${credentialScope}`;
-
-  // Canonical headers and signed headers differ by method
-  const isPut = method === "PUT";
-  const canonicalHeaders = isPut && contentType
-    ? `content-type:${contentType}\nhost:${host}\n`
-    : `host:${host}\n`;
-  const signedHeaders = isPut && contentType ? "content-type;host" : "host";
-
-  const queryParams: Record<string, string> = {
-    "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
-    "X-Amz-Content-Sha256": "UNSIGNED-PAYLOAD",
-    "X-Amz-Credential": credential,
-    "X-Amz-Date": amzDate,
-    "X-Amz-Expires": String(expiresIn),
-    "X-Amz-SignedHeaders": signedHeaders,
+  return {
+    values: {
+      cloudName: cloudName!,
+      apiKey: process.env.CLOUDINARY_API_KEY!,
+      apiSecret: process.env.CLOUDINARY_API_SECRET!,
+    },
+    missing: [],
   };
+}
 
-  const canonicalQueryString = Object.keys(queryParams)
-    .sort()
-    .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(queryParams[k])}`)
-    .join("&");
+function configureCloudinary(env: CloudinaryEnv): void {
+  cloudinary.config({
+    cloud_name: env.cloudName,
+    api_key: env.apiKey,
+    api_secret: env.apiSecret,
+    secure: true,
+  });
+}
 
-  const canonicalUri = `/${bucketName}/${encodeURIComponent(key).replace(/%2F/g, "/")}`;
-  const canonicalRequest = [
-    method,
-    canonicalUri,
-    canonicalQueryString,
-    canonicalHeaders,
-    signedHeaders,
-    "UNSIGNED-PAYLOAD",
-  ].join("\n");
+function getFacePublicId(uid: string): string {
+  return `faces/${uid}`;
+}
 
-  const stringToSign = [
-    "AWS4-HMAC-SHA256",
-    amzDate,
-    credentialScope,
-    crypto.createHash("sha256").update(canonicalRequest, "utf8").digest("hex"),
-  ].join("\n");
+async function uploadFaceBufferToCloudinary(buffer: Buffer, uid: string): Promise<{
+  publicId: string;
+  secureUrl: string;
+}> {
+  const publicId = getFacePublicId(uid);
 
-  const signingKey = getSigningKey(secretAccessKey, dateStamp, region, service);
-  const signature = hmacHex(signingKey, stringToSign);
+  const uploadResult = await new Promise<any>((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        public_id: publicId,
+        resource_type: "image",
+        overwrite: true,
+        invalidate: true,
+        format: "jpg",
+      },
+      (error, result) => {
+        if (error || !result) {
+          reject(error ?? new Error("Cloudinary upload failed."));
+          return;
+        }
+        resolve(result);
+      }
+    );
 
-  return `${endpoint}?${canonicalQueryString}&X-Amz-Signature=${signature}`;
+    uploadStream.end(buffer);
+  });
+
+  return {
+    publicId: uploadResult.public_id,
+    secureUrl: uploadResult.secure_url,
+  };
 }
 
 // ── GET handler (worker self-fetch OR admin photo viewer) ─────────────────────
-//
-//  • Worker self-fetch: include `x-worker-uid` header → 2-minute presigned URL
-//    (short for security — worker fetches their own face for re-verification)
-//  • Admin viewer:     include `uid` query param    → 15-minute presigned URL
 
 export async function GET(request: NextRequest): Promise<Response> {
   try {
-    const accountId       = requireEnv("R2_ACCOUNT_ID");
-    const accessKeyId     = requireEnv("R2_ACCESS_KEY_ID");
-    const secretAccessKey = requireEnv("R2_SECRET_ACCESS_KEY");
-    const bucketName      = requireEnv("R2_BUCKET_NAME");
-
-    // ── Worker self-fetch path (2-minute URL) ─────────────────────────────
-    const workerUid = request.headers.get("x-worker-uid")?.trim();
-    if (workerUid) {
-      const key = `faces/${workerUid}.jpg`;
-      const presignedUrl = buildPresignedUrl({
-        accountId,
-        accessKeyId,
-        secretAccessKey,
-        bucketName,
-        key,
-        method: "GET",
-        expiresIn: 120, // 2 minutes for security
-      });
-      return Response.json({ presignedUrl, key });
+    const { values, missing } = getCloudinaryEnv();
+    if (!values) {
+      return Response.json(
+        {
+          code: "CLOUDINARY_ENV_MISSING",
+          error: `Missing Cloudinary configuration: ${missing.join(", ")}`,
+          missing,
+          hint: "Set these variables in .env.local and restart the Next.js dev server.",
+        },
+        { status: 500 }
+      );
     }
+    configureCloudinary(values);
 
-    // ── Admin viewer path (15-minute URL) ─────────────────────────────────
+    const workerUid = request.headers.get("x-worker-uid")?.trim();
     const uid = request.nextUrl.searchParams.get("uid")?.trim();
-    if (!uid) {
+    const resolvedUid = workerUid || uid;
+
+    // Worker self-fetch can use header; admin viewer uses query param.
+    if (!workerUid && !uid) {
       return Response.json(
         { error: "Missing uid query parameter or x-worker-uid header" },
         { status: 400 }
       );
     }
 
-    const key = `faces/${uid}.jpg`;
-    const presignedUrl = buildPresignedUrl({
-      accountId,
-      accessKeyId,
-      secretAccessKey,
-      bucketName,
-      key,
-      method: "GET",
-      expiresIn: 900, // 15 minutes for admin viewing
-    });
+    if (!resolvedUid) {
+      return Response.json({ error: "Missing uid" }, { status: 400 });
+    }
 
-    return Response.json({ presignedUrl, key });
+    const publicId = getFacePublicId(resolvedUid);
+
+    try {
+      const resource = await cloudinary.api.resource(publicId, {
+        resource_type: "image",
+        type: "upload",
+      });
+
+      return Response.json({
+        key: resource.public_id,
+        secureUrl: resource.secure_url,
+        // Keep old response key for backward compatibility with existing UI.
+        presignedUrl: resource.secure_url,
+      });
+    } catch (err) {
+      const errorObj = err as { http_code?: number; message?: string };
+      if (errorObj?.http_code === 404) {
+        return Response.json(
+          { error: "Face photo not found for this user." },
+          { status: 404 }
+        );
+      }
+
+      throw err;
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return Response.json({ error: message }, { status: 500 });
@@ -190,25 +172,51 @@ export async function POST(request: NextRequest): Promise<Response> {
       return Response.json({ error: "Missing x-worker-uid header" }, { status: 401 });
     }
 
-    const accountId       = requireEnv("R2_ACCOUNT_ID");
-    const accessKeyId     = requireEnv("R2_ACCESS_KEY_ID");
-    const secretAccessKey = requireEnv("R2_SECRET_ACCESS_KEY");
-    const bucketName      = requireEnv("R2_BUCKET_NAME");
+    const { values, missing } = getCloudinaryEnv();
+    if (!values) {
+      return Response.json(
+        {
+          code: "CLOUDINARY_ENV_MISSING",
+          error: `Missing Cloudinary configuration: ${missing.join(", ")}`,
+          missing,
+          hint: "Set these variables in .env.local and restart the Next.js dev server.",
+        },
+        { status: 500 }
+      );
+    }
+    configureCloudinary(values);
 
-    const key = `faces/${uid}.jpg`;
+    const contentType = request.headers.get("content-type") ?? "";
+    let imageBuffer: Buffer;
 
-    const presignedUrl = buildPresignedUrl({
-      accountId,
-      accessKeyId,
-      secretAccessKey,
-      bucketName,
-      key,
-      method: "PUT",
-      expiresIn: 300, // 5 minutes
-      contentType: "image/jpeg",
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await request.formData();
+      const file = formData.get("file");
+      if (!(file instanceof Blob)) {
+        return Response.json({ error: "Missing image file in form data." }, { status: 400 });
+      }
+
+      const arrayBuffer = await file.arrayBuffer();
+      if (arrayBuffer.byteLength === 0) {
+        return Response.json({ error: "Received empty image payload." }, { status: 400 });
+      }
+      imageBuffer = Buffer.from(arrayBuffer);
+    } else {
+      const arrayBuffer = await request.arrayBuffer();
+      if (arrayBuffer.byteLength === 0) {
+        return Response.json({ error: "Missing image payload in request body." }, { status: 400 });
+      }
+      imageBuffer = Buffer.from(arrayBuffer);
+    }
+
+    const upload = await uploadFaceBufferToCloudinary(imageBuffer, uid);
+
+    return Response.json({
+      key: upload.publicId,
+      secureUrl: upload.secureUrl,
+      // Keep old response key for backward compatibility with existing UI.
+      presignedUrl: upload.secureUrl,
     });
-
-    return Response.json({ presignedUrl, key });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return Response.json({ error: message }, { status: 500 });
