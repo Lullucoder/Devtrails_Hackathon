@@ -41,8 +41,9 @@ const STEP_TIMEOUT_MS = 15_000;
 const COUNTDOWN_START_MS = 8_000;
 const STRAIGHT_HOLD_MS = 1_000;
 const TURN_HOLD_MS = 800;
-const EAR_THRESHOLD = 0.2;
-const TURN_ANGLE_DEG = 10;
+const TURN_ANGLE_DEG = 8;
+const MIN_BLINK_GAP_MS = 350;
+const MIN_CLOSED_EYE_MS = 60;
 const FRAME_SIZE = 320;
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -62,6 +63,10 @@ export default function FaceLivenessCheck({
   const turnHoldStartRef = useRef<number | null>(null);
   const blinkCountRef = useRef<number>(0);
   const eyeClosedRef = useRef<boolean>(false);
+  const eyeClosedSinceRef = useRef<number | null>(null);
+  const lastBlinkAtRef = useRef<number>(0);
+  const step2OpenEarRef = useRef<number | null>(null);
+  const yawEmaRef = useRef<number>(0);
   const doneRef = useRef<boolean>(false);
   const currentStepRef = useRef<Step>(1);
 
@@ -81,7 +86,7 @@ export default function FaceLivenessCheck({
   const stepLabels: Record<Step, string> = {
     1: "Look straight at the camera",
     2: "Blink twice slowly",
-    3: "Turn your head slightly to the left",
+    3: "Turn your head slightly left or right",
   };
 
   // ─── Camera setup ──────────────────────────────────────────────────────────
@@ -158,6 +163,10 @@ export default function FaceLivenessCheck({
         turnHoldStartRef.current = null;
         blinkCountRef.current = 0;
         eyeClosedRef.current = false;
+        eyeClosedSinceRef.current = null;
+        lastBlinkAtRef.current = 0;
+        step2OpenEarRef.current = null;
+        yawEmaRef.current = 0;
         setBlinkCount(0);
       }, 600);
     },
@@ -208,27 +217,51 @@ export default function FaceLivenessCheck({
           straightHoldStartRef.current = null;
         }
       } else if (step === 2) {
-        // Left eye: 159, 145, 133, 160, 144, 153
-        const le = [lm[159], lm[145], lm[133], lm[160], lm[144], lm[153]];
-        // Right eye: 386, 374, 362, 387, 373, 380
-        const re = [lm[386], lm[374], lm[362], lm[387], lm[373], lm[380]];
-
-        const leftEAR = ear(le[2], le[0], le[1], le[5], le[4], le[3]);
-        const rightEAR = ear(re[2], re[0], re[1], re[5], re[4], re[3]);
+        // Robust EAR using eye corners + two vertical pairs per eye.
+        const leftEAR =
+          (dist(lm[159], lm[145]) + dist(lm[158], lm[153])) /
+          (2 * (dist(lm[33], lm[133]) || 1e-6));
+        const rightEAR =
+          (dist(lm[386], lm[374]) + dist(lm[385], lm[380])) /
+          (2 * (dist(lm[362], lm[263]) || 1e-6));
         const avgEAR = (leftEAR + rightEAR) / 2;
 
-        if (avgEAR < EAR_THRESHOLD) {
+        if (step2OpenEarRef.current === null) {
+          step2OpenEarRef.current = avgEAR;
+        }
+
+        const openEar = step2OpenEarRef.current;
+        const closeThreshold = Math.max(0.14, openEar * 0.72);
+        const openThreshold = Math.max(closeThreshold + 0.02, openEar * 0.86);
+
+        // Update baseline only while eyes are clearly open.
+        if (avgEAR > openThreshold) {
+          step2OpenEarRef.current = openEar * 0.92 + avgEAR * 0.08;
+        }
+
+        if (avgEAR <= closeThreshold) {
           if (!eyeClosedRef.current) {
             eyeClosedRef.current = true;
+            eyeClosedSinceRef.current = now;
           }
         } else {
           if (eyeClosedRef.current) {
-            // Eyes opened back — count as one blink
+            const closedMs = eyeClosedSinceRef.current
+              ? now - eyeClosedSinceRef.current
+              : 0;
+            const gapMs = now - lastBlinkAtRef.current;
+
             eyeClosedRef.current = false;
-            blinkCountRef.current += 1;
-            setBlinkCount(blinkCountRef.current);
-            if (blinkCountRef.current >= 2) {
-              advanceStep(2);
+            eyeClosedSinceRef.current = null;
+
+            // Eyes opened back — count as one blink only if it looked real.
+            if (avgEAR >= openThreshold && closedMs >= MIN_CLOSED_EYE_MS && gapMs >= MIN_BLINK_GAP_MS) {
+              blinkCountRef.current += 1;
+              lastBlinkAtRef.current = now;
+              setBlinkCount(blinkCountRef.current);
+              if (blinkCountRef.current >= 2) {
+                advanceStep(2);
+              }
             }
           }
         }
@@ -244,7 +277,11 @@ export default function FaceLivenessCheck({
         const faceWidth = dist(leftCheek, rightCheek);
         const offset = (midX - nose.x) / (faceWidth || 1); // positive = nose left of centre
         // Approx angle: offset * 90 gives degrees (rough)
-        const angleDeg = offset * 90;
+        const rawAngleDeg = offset * 90;
+
+        // Light smoothing to avoid jitter around threshold.
+        yawEmaRef.current = yawEmaRef.current * 0.8 + rawAngleDeg * 0.2;
+        const angleDeg = Math.abs(yawEmaRef.current);
 
         if (angleDeg >= TURN_ANGLE_DEG) {
           if (!turnHoldStartRef.current) turnHoldStartRef.current = now;
@@ -343,6 +380,10 @@ export default function FaceLivenessCheck({
     currentStepRef.current = 1;
     blinkCountRef.current = 0;
     eyeClosedRef.current = false;
+    eyeClosedSinceRef.current = null;
+    lastBlinkAtRef.current = 0;
+    step2OpenEarRef.current = null;
+    yawEmaRef.current = 0;
     straightHoldStartRef.current = null;
     turnHoldStartRef.current = null;
     setCurrentStep(1);
