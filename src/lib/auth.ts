@@ -84,6 +84,14 @@ function mapFirebaseError(err: unknown): AuthError {
       ? (err as { code: string }).code
       : "";
 
+  const message =
+    err && typeof err === "object" && "message" in err
+      ? String((err as { message?: unknown }).message ?? "")
+      : "";
+
+  const currentHost =
+    typeof window !== "undefined" ? window.location.hostname : "this host";
+
   switch (code) {
     case "auth/invalid-phone-number":
       return new AuthError("invalid-phone", "The phone number is invalid.");
@@ -95,6 +103,18 @@ function mapFirebaseError(err: unknown): AuthError {
       );
 
     case "auth/captcha-check-failed":
+      if (/hostname match not found/i.test(message)) {
+        return new AuthError(
+          "unauthorized-domain",
+          `Hostname mismatch for reCAPTCHA on ${currentHost}. Add this hostname to Firebase Authentication > Settings > Authorized domains (no protocol, no port), then refresh and try again.`
+        );
+      }
+
+      return new AuthError(
+        "recaptcha-failed",
+        "reCAPTCHA verification failed. Disable ad blockers/privacy shields, allow third-party cookies, refresh the page, and try again."
+      );
+
     case "auth/recaptcha-not-enabled":
     case "auth/missing-recaptcha-token":
     case "auth/invalid-app-credential":
@@ -187,6 +207,7 @@ export async function sendOTP(
         message: firebaseErr.message,
         name: firebaseErr.name,
         customData: firebaseErr.customData,
+        hostname: typeof window !== "undefined" ? window.location.hostname : undefined,
       });
 
       console.error(
