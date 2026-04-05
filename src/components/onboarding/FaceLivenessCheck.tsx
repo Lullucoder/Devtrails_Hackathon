@@ -39,10 +39,10 @@ function ear(p1: Point, p2: Point, p3: Point, p4: Point, p5: Point, p6: Point): 
 
 const STEP_TIMEOUT_MS = 15_000;
 const COUNTDOWN_START_MS = 8_000;
-const STRAIGHT_HOLD_MS = 1_500;
-const TURN_HOLD_MS = 1_000;
+const STRAIGHT_HOLD_MS = 1_000;
+const TURN_HOLD_MS = 800;
 const EAR_THRESHOLD = 0.2;
-const TURN_ANGLE_DEG = 15;
+const TURN_ANGLE_DEG = 10;
 const FRAME_SIZE = 320;
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -63,6 +63,7 @@ export default function FaceLivenessCheck({
   const blinkCountRef = useRef<number>(0);
   const eyeClosedRef = useRef<boolean>(false);
   const doneRef = useRef<boolean>(false);
+  const currentStepRef = useRef<Step>(1);
 
   const [currentStep, setCurrentStep] = useState<Step>(1);
   const [stepStatuses, setStepStatuses] = useState<[StepStatus, StepStatus, StepStatus]>([
@@ -168,9 +169,6 @@ export default function FaceLivenessCheck({
   const processResults = useCallback(
     (results: any, step: Step) => {
       if (doneRef.current) return;
-      if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) return;
-
-      const lm = results.multiFaceLandmarks[0]; // array of {x,y,z}
 
       const now = Date.now();
       const elapsed = now - stepStartRef.current;
@@ -189,11 +187,17 @@ export default function FaceLivenessCheck({
         return;
       }
 
+      if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) {
+        return;
+      }
+
+      const lm = results.multiFaceLandmarks[0]; // array of {x,y,z}
+
       if (step === 1) {
         // Landmark 1 = nose tip (normalised 0–1)
         const nose = lm[1];
-        const inCenterX = nose.x >= 0.3 && nose.x <= 0.7;
-        const inCenterY = nose.y >= 0.3 && nose.y <= 0.7;
+        const inCenterX = nose.x >= 0.2 && nose.x <= 0.8;
+        const inCenterY = nose.y >= 0.2 && nose.y <= 0.8;
 
         if (inCenterX && inCenterY) {
           if (!straightHoldStartRef.current) straightHoldStartRef.current = now;
@@ -255,6 +259,10 @@ export default function FaceLivenessCheck({
     [advanceStep, stopCamera]
   );
 
+  useEffect(() => {
+    currentStepRef.current = currentStep;
+  }, [currentStep]);
+
   // ─── Init MediaPipe + camera ───────────────────────────────────────────────
 
   useEffect(() => {
@@ -294,7 +302,14 @@ export default function FaceLivenessCheck({
         minTrackingConfidence: 0.5,
       });
 
+      faceMesh.onResults((results: any) => {
+        processResults(results, currentStepRef.current);
+      });
+
       faceMeshRef.current = faceMesh;
+      stepStartRef.current = Date.now();
+      setTimedOut(false);
+      setCountdown(null);
 
       // We drive inference manually via rAF
       const video = videoRef.current!;
@@ -318,22 +333,14 @@ export default function FaceLivenessCheck({
       stopCamera();
       faceMeshRef.current?.close?.();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Wire onResults every time currentStep changes so the closure has fresh step
-  useEffect(() => {
-    if (!faceMeshRef.current) return;
-    faceMeshRef.current.onResults((results: any) => {
-      processResults(results, currentStep);
-    });
-  }, [currentStep, processResults]);
+  }, [processResults, stopCamera]);
 
   // ─── Restart ───────────────────────────────────────────────────────────────
 
   const handleRetry = () => {
     stopCamera();
     doneRef.current = false;
+    currentStepRef.current = 1;
     blinkCountRef.current = 0;
     eyeClosedRef.current = false;
     straightHoldStartRef.current = null;
