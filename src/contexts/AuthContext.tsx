@@ -29,7 +29,7 @@ interface AuthContextType {
     otp: string,
     selectedRole: "worker" | "admin"
   ) => Promise<void>;
-  signOut: () => void;
+  signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -41,7 +41,7 @@ const AuthContext = createContext<AuthContextType>({
   verifyOtp: async () => {
     throw new Error("Not implemented");
   },
-  signOut: () => {},
+  signOut: async () => {},
 });
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
@@ -54,6 +54,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const useMockAuth = isMockAuthEnabled();
+
+  const createServerSession = async (firebaseUser: User): Promise<void> => {
+    const idToken = await firebaseUser.getIdToken();
+    const res = await fetch("/api/auth/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ idToken }),
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({} as { error?: string }));
+      throw new Error(body.error ?? `Failed to create server session (HTTP ${res.status})`);
+    }
+  };
+
+  const clearServerSession = async (): Promise<void> => {
+    await fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "same-origin",
+    });
+  };
 
   const isPermissionDeniedError = (err: unknown): boolean => {
     if (!err || typeof err !== "object") return false;
@@ -70,6 +92,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
+        try {
+          await createServerSession(firebaseUser);
+        } catch (err) {
+          console.warn("Failed to refresh server session cookie:", err);
+        }
+
         setUser(firebaseUser);
         try {
           const profile = await getWorkerByUid(firebaseUser.uid);
@@ -188,6 +216,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             updatedAt: new Date().toISOString(),
           };
         }
+
+        // Create server-side session cookie so /worker/* and /admin/* routes
+        // protected by proxy can resolve the authenticated user.
+        try {
+          await createServerSession(firebaseUser);
+        } catch (err) {
+          // Avoid partial login state where client auth succeeds but server
+          // session is missing, which causes redirect loops back to /login.
+          await firebaseSignOut();
+          throw err;
+        }
       }
 
       setUser(firebaseUser);
@@ -206,6 +245,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (useMockAuth) {
         await mockSignOut();
       } else {
+        await clearServerSession();
         await firebaseSignOut();
       }
     } catch (err) {

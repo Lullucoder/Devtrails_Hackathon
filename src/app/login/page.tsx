@@ -37,11 +37,22 @@ export default function LoginPage() {
   }, [otpRequestedFor]);
 
   useEffect(() => {
-    if (!user || !role) {
+    if (!user) {
       return;
     }
 
-    router.replace(role === "admin" ? "/admin/dashboard" : "/worker/dashboard");
+    if (role === "admin") {
+      router.replace("/admin/dashboard");
+      return;
+    }
+
+    if (role === "worker") {
+      router.replace("/worker/dashboard");
+      return;
+    }
+
+    // Authenticated but role/profile not resolved yet → continue onboarding.
+    router.replace("/onboarding");
   }, [router, user, role]);
 
   const handleSendOtp = async (event: FormEvent) => {
