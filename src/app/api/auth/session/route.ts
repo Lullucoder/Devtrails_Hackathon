@@ -1,6 +1,27 @@
 import { cookies } from "next/headers";
 import { createSessionCookie } from "@/lib/session";
 
+type DecodedTokenPayload = {
+  aud?: string;
+  iss?: string;
+  sub?: string;
+};
+
+function decodeTokenPayload(token: string): DecodedTokenPayload | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+
+    const base64Url = parts[1]!;
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+    const json = Buffer.from(padded, "base64").toString("utf8");
+    return JSON.parse(json) as DecodedTokenPayload;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * POST /api/auth/session
  *
@@ -15,6 +36,24 @@ export async function POST(request: Request) {
       return Response.json(
         { error: "Missing idToken in request body" },
         { status: 400 }
+      );
+    }
+
+    const adminProjectId = process.env.FIREBASE_ADMIN_PROJECT_ID;
+    const decoded = decodeTokenPayload(idToken);
+
+    if (decoded?.aud && adminProjectId && decoded.aud !== adminProjectId) {
+      return Response.json(
+        {
+          code: "PROJECT_MISMATCH",
+          error:
+            "Firebase project mismatch between client ID token and Admin SDK credentials.",
+          tokenProjectId: decoded.aud,
+          adminProjectId,
+          hint:
+            "Ensure NEXT_PUBLIC_FIREBASE_PROJECT_ID and FIREBASE_ADMIN_PROJECT_ID point to the same Firebase project in this deployment.",
+        },
+        { status: 401 }
       );
     }
 
@@ -34,8 +73,16 @@ export async function POST(request: Request) {
     return Response.json({ status: "success" }, { status: 200 });
   } catch (error) {
     console.error("Failed to create session:", error);
+
+    const detail = error instanceof Error ? error.message : "Unknown error";
     return Response.json(
-      { error: "Unauthorized – invalid ID token" },
+      {
+        code: "INVALID_ID_TOKEN",
+        error: "Unauthorized – invalid ID token",
+        hint:
+          "Verify Firebase Admin credentials and project IDs in deployment environment variables.",
+        detail: process.env.NODE_ENV === "production" ? undefined : detail,
+      },
       { status: 401 }
     );
   }

@@ -56,17 +56,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const useMockAuth = isMockAuthEnabled();
 
   const createServerSession = async (firebaseUser: User): Promise<void> => {
-    const idToken = await firebaseUser.getIdToken();
-    const res = await fetch("/api/auth/session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "same-origin",
-      body: JSON.stringify({ idToken }),
-    });
+    const callSessionApi = async (forceRefresh: boolean): Promise<Response> => {
+      const idToken = await firebaseUser.getIdToken(forceRefresh);
+      return fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ idToken }),
+      });
+    };
+
+    let res = await callSessionApi(false);
+    if (!res.ok && res.status === 401) {
+      // Retry once with force-refresh to avoid stale-token failures.
+      res = await callSessionApi(true);
+    }
 
     if (!res.ok) {
-      const body = await res.json().catch(() => ({} as { error?: string }));
-      throw new Error(body.error ?? `Failed to create server session (HTTP ${res.status})`);
+      const body = await res.json().catch(
+        () => ({} as { error?: string; code?: string; hint?: string })
+      );
+      const code = body.code ? ` (${body.code})` : "";
+      const hint = body.hint ? ` ${body.hint}` : "";
+      throw new Error(
+        `${body.error ?? `Failed to create server session (HTTP ${res.status})`}${code}.${hint}`.trim()
+      );
     }
   };
 
@@ -96,9 +110,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await createServerSession(firebaseUser);
         } catch (err) {
           console.warn("Failed to refresh server session cookie:", err);
+
+          if (
+            err instanceof Error &&
+            /(PROJECT_MISMATCH|INVALID_ID_TOKEN|invalid ID token|project mismatch)/i.test(
+              err.message
+            )
+          ) {
+            // Clear stale/incompatible client auth state to prevent login/dashboard loops.
+            await firebaseSignOut();
+            return;
+          }
         }
 
         setUser(firebaseUser);
+        setUserProfile(null);
+        setRole(null);
+        setIsOnboarded(false);
         try {
           const profile = await getWorkerByUid(firebaseUser.uid);
           if (profile) {
