@@ -70,19 +70,6 @@ function ensureFirebaseApp(): FirebaseApp {
   return cachedApp;
 }
 
-function createLazyServiceProxy<T extends object>(factory: () => T): T {
-  return new Proxy({} as T, {
-    get(_target, prop) {
-      const instance = factory() as Record<PropertyKey, unknown>;
-      const value = instance[prop];
-      if (typeof value === "function") {
-        return value.bind(instance);
-      }
-      return value;
-    },
-  });
-}
-
 function ensureAuth(): Auth {
   if (!cachedAuth) {
     cachedAuth = getAuth(ensureFirebaseApp());
@@ -104,9 +91,9 @@ function ensureStorage(): FirebaseStorage {
   return cachedStorage;
 }
 
-const app: FirebaseApp = createLazyServiceProxy<FirebaseApp>(() => ensureFirebaseApp());
-const auth: Auth = createLazyServiceProxy<Auth>(() => ensureAuth());
-const db: Firestore = createLazyServiceProxy<Firestore>(() => ensureDb());
-const storage: FirebaseStorage = createLazyServiceProxy<FirebaseStorage>(() => ensureStorage());
+const app: FirebaseApp = ensureFirebaseApp();
+const auth: Auth = ensureAuth();
+const db: Firestore = ensureDb();
+const storage: FirebaseStorage = ensureStorage();
 
 export { app, auth, db, storage, isFirebaseClientConfigured };
