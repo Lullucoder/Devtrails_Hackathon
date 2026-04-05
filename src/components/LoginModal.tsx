@@ -278,20 +278,19 @@ export function LoginModal({ isOpen, onOpenChange }: LoginModalProps) {
               : `Enter the 6-digit OTP sent to +91 ${maskedPhone}`}
           </p>
 
-          {/* reCAPTCHA container - only show if not using mock auth */}
+          {/* reCAPTCHA container - invisible, hidden from view */}
           {!useMockAuth && (
-            <div className="flex flex-col items-center mb-6">
+            <div className="hidden">
               <div id="recaptcha-container" ref={recaptchaRef} />
-              {recaptchaError && (
-                <p className="text-xs text-destructive mt-2 text-center">
-                  {recaptchaError}
-                </p>
-              )}
-              {!isReady && !recaptchaError && (
-                <p className="text-xs text-muted-foreground mt-2 animate-pulse">
-                  Loading security verification...
-                </p>
-              )}
+            </div>
+          )}
+          
+          {/* reCAPTCHA loading/error status */}
+          {!useMockAuth && recaptchaError && (
+            <div className="mb-4 p-3 rounded-xl bg-destructive/10 border border-destructive/30">
+              <p className="text-xs text-destructive text-center">
+                {recaptchaError}
+              </p>
             </div>
           )}
 

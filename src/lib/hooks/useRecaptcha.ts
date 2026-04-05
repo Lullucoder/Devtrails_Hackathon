@@ -34,7 +34,7 @@ export function useRecaptcha() {
 
     try {
       const rv = new RecaptchaVerifier(auth, el, {
-        size: "normal",
+        size: "invisible",
         callback: () => {
           // Solved — nothing to do; signInWithPhoneNumber drives the flow.
           setIsReady(true);

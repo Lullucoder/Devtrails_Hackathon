@@ -22,20 +22,29 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-const REQUIRED_FIREBASE_PUBLIC_KEYS = [
-  "NEXT_PUBLIC_FIREBASE_API_KEY",
-  "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
-  "NEXT_PUBLIC_FIREBASE_PROJECT_ID",
-  "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET",
-  "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID",
-  "NEXT_PUBLIC_FIREBASE_APP_ID",
+function isMissing(value: unknown): boolean {
+  return typeof value !== "string" || value.trim().length === 0;
+}
+
+const REQUIRED_FIREBASE_PUBLIC_CONFIG = [
+  { envKey: "NEXT_PUBLIC_FIREBASE_API_KEY", value: firebaseConfig.apiKey },
+  { envKey: "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN", value: firebaseConfig.authDomain },
+  { envKey: "NEXT_PUBLIC_FIREBASE_PROJECT_ID", value: firebaseConfig.projectId },
+  { envKey: "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET", value: firebaseConfig.storageBucket },
+  { envKey: "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID", value: firebaseConfig.messagingSenderId },
+  { envKey: "NEXT_PUBLIC_FIREBASE_APP_ID", value: firebaseConfig.appId },
 ] as const;
 
-const missingFirebasePublicKeys = REQUIRED_FIREBASE_PUBLIC_KEYS.filter(
-  (key) => !process.env[key]
-);
+const missingFirebasePublicKeys = REQUIRED_FIREBASE_PUBLIC_CONFIG
+  .filter(({ value }) => isMissing(value))
+  .map(({ envKey }) => envKey);
 
 const isFirebaseClientConfigured = missingFirebasePublicKeys.length === 0;
+
+// Log missing keys for debugging in the browser.
+if (!isFirebaseClientConfigured && typeof window !== "undefined") {
+  console.error("Missing Firebase env vars:", missingFirebasePublicKeys);
+}
 
 let cachedApp: FirebaseApp | null = null;
 let cachedAuth: Auth | null = null;
@@ -52,7 +61,8 @@ function ensureFirebaseApp(): FirebaseApp {
 
   if (!isFirebaseClientConfigured) {
     throw new Error(
-      `Firebase client config missing env vars: ${missingFirebasePublicKeys.join(", ")}`
+      `Firebase client config missing env vars: ${missingFirebasePublicKeys.join(", ")}. ` +
+      "If running on Vercel, ensure NEXT_PUBLIC_* vars are set in the correct environment and redeploy."
     );
   }
 
