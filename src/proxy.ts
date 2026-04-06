@@ -2,10 +2,11 @@
  * Next.js 16 Proxy (replaces deprecated middleware.ts)
  *
  * Protects /worker/* and /admin/* routes using Firebase session cookies.
+ * Protects /onboarding so only authenticated users can access onboarding.
  * For /admin/* routes, additionally verifies the user has role === "admin".
  *
  * Public routes (never protected):
- *   /, /login, /onboarding, /api/auth/session, /api/auth/logout, /api/webhooks/*
+ *   /, /login (legacy alias), /api/auth/session, /api/auth/logout, /api/webhooks/*
  */
 
 import { NextResponse } from "next/server";
@@ -21,6 +22,18 @@ async function getSessionClaims(sessionCookie: string) {
   }
 }
 
+function buildLoginRedirectUrl(request: NextRequest): URL {
+  const loginUrl = new URL("/", request.url);
+  loginUrl.searchParams.set("login", "1");
+
+  const nextPath = `${request.nextUrl.pathname}${request.nextUrl.search}`;
+  if (nextPath && nextPath !== "/") {
+    loginUrl.searchParams.set("next", nextPath);
+  }
+
+  return loginUrl;
+}
+
 // ── Proxy function ─────────────────────────────────────────────────────────────
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -29,7 +42,6 @@ export async function proxy(request: NextRequest) {
   const publicPaths = [
     "/",
     "/login",
-    "/onboarding",
     "/api/auth/session",
     "/api/auth/logout",
   ];
@@ -44,8 +56,9 @@ export async function proxy(request: NextRequest) {
   // ── 2. Only protect /worker/* and /admin/* ────────────────────────────────
   const isWorkerRoute = pathname.startsWith("/worker/") || pathname === "/worker";
   const isAdminRoute = pathname.startsWith("/admin/") || pathname === "/admin";
+  const isOnboardingRoute = pathname === "/onboarding" || pathname.startsWith("/onboarding/");
 
-  if (!isWorkerRoute && !isAdminRoute) {
+  if (!isWorkerRoute && !isAdminRoute && !isOnboardingRoute) {
     return NextResponse.next();
   }
 
@@ -53,16 +66,47 @@ export async function proxy(request: NextRequest) {
   const sessionCookie = request.cookies.get("session")?.value;
 
   if (!sessionCookie) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.redirect(buildLoginRedirectUrl(request));
   }
 
   const claims = await getSessionClaims(sessionCookie);
 
   if (!claims) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.redirect(buildLoginRedirectUrl(request));
   }
 
-  // ── 4. For /admin/* routes: verify role === "admin" ───────────────────────
+  // ── 4. For /onboarding: only allow worker users not yet onboarded ─────────
+  if (isOnboardingRoute) {
+    try {
+      const workersSnapshot = await adminDb
+        .collection("workers")
+        .where("uid", "==", claims.uid)
+        .limit(1)
+        .get();
+
+      if (workersSnapshot.empty) {
+        return NextResponse.redirect(buildLoginRedirectUrl(request));
+      }
+
+      const workerData = workersSnapshot.docs[0].data() as {
+        role?: string;
+        isOnboarded?: boolean;
+      };
+
+      if (workerData.role === "admin") {
+        return NextResponse.redirect(new URL("/admin/dashboard", request.url));
+      }
+
+      if (workerData.isOnboarded) {
+        return NextResponse.redirect(new URL("/worker/dashboard", request.url));
+      }
+    } catch (error) {
+      console.error("Error checking onboarding access:", error);
+      return NextResponse.redirect(buildLoginRedirectUrl(request));
+    }
+  }
+
+  // ── 5. For /admin/* routes: verify role === "admin" ───────────────────────
   if (isAdminRoute) {
     try {
       // Query the workers collection for this uid
@@ -94,11 +138,11 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  // ── 5. Authenticated (and authorised for admin) → allow through ───────────
+  // ── 6. Authenticated and authorised route → allow through ──────────────────
   return NextResponse.next();
 }
 
 // ── Matcher: only run on protected route patterns ──────────────────────────────
 export const config = {
-  matcher: ["/worker/:path*", "/admin/:path*"],
+  matcher: ["/worker/:path*", "/admin/:path*", "/onboarding", "/onboarding/:path*"],
 };

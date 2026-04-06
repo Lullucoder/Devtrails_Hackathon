@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import {
@@ -389,18 +389,35 @@ function SubmittingScreen({ success }: { success: boolean }) {
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, role, loading } = useAuth();
   const [step, setStep]     = useState<OnboardingStep>("aadhaar");
   const [aadhaarResult, setAadhaarResult] = useState<AadhaarVerificationResult | null>(null);
   const [personal, setPersonal] = useState<PersonalDetails>({ name: "", city: "", platform: "" });
   const [work, setWork]         = useState<WorkDetails>({
     zone: "", workingHours: "morning", weeklyEarningRange: "", upiId: "",
   });
-  const [faceResult, setFaceResult] = useState<FaceVerificationResult | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
+  useEffect(() => {
+    if (loading) return;
+
+    if (!user) {
+      router.replace("/?login=1");
+      return;
+    }
+
+    if (role === "admin") {
+      router.replace("/admin/dashboard");
+      return;
+    }
+
+    if (userProfile?.isOnboarded) {
+      router.replace("/worker/dashboard");
+    }
+  }, [loading, user, role, userProfile, router]);
+
   // Use the authenticated user's UID from Firebase Auth
-  const workerUid = user?.uid || `worker-${Date.now()}`;
+  const workerUid = user?.uid ?? "";
 
   const handleAadhaarSuccess = useCallback((result: AadhaarVerificationResult) => {
     setAadhaarResult(result);
@@ -413,13 +430,11 @@ export default function OnboardingPage() {
   }, []);
 
   const handleFaceVerified = useCallback((result: FaceVerificationResult) => {
-    setFaceResult(result);
     handleFinalSubmit(result);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aadhaarResult, personal, work]);
 
   const handleFaceSkip = useCallback(() => {
-    setFaceResult(null);
     handleFinalSubmit(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aadhaarResult, personal, work]);
@@ -427,6 +442,10 @@ export default function OnboardingPage() {
   async function handleFinalSubmit(face: FaceVerificationResult | null) {
     setStep("submitting");
     try {
+      if (!workerUid) {
+        throw new Error("Authentication required to continue onboarding.");
+      }
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const kycFields: Record<string, any> = {};
       if (aadhaarResult) {
@@ -480,6 +499,10 @@ export default function OnboardingPage() {
       toast.error("Something went wrong. Please try again.");
       setStep("face");
     }
+  }
+
+  if (loading || !user || role === "admin" || userProfile?.isOnboarded) {
+    return null;
   }
 
   return (

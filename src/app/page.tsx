@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Shield,
@@ -71,6 +70,21 @@ export default function LandingPage() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const { user, userProfile, role, loading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const shouldOpenLoginModal = searchParams.get("login") === "1";
+
+  const handleLoginModalOpenChange = (open: boolean) => {
+    setIsLoginModalOpen(open);
+
+    if (!open && shouldOpenLoginModal) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("login");
+      params.delete("next");
+
+      const nextQuery = params.toString();
+      router.replace(nextQuery ? `/?${nextQuery}` : "/");
+    }
+  };
 
   useEffect(() => {
     if (loading) return;
@@ -96,7 +110,10 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen">
-      <LoginModal isOpen={isLoginModalOpen} onOpenChange={setIsLoginModalOpen} />
+      <LoginModal
+        isOpen={isLoginModalOpen || shouldOpenLoginModal}
+        onOpenChange={handleLoginModalOpenChange}
+      />
       {/* Navbar */}
       <nav className="fixed top-0 w-full z-50 glass">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
