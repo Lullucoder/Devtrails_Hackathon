@@ -39,24 +39,43 @@ let cachedAuth: Auth | null = null;
 let cachedDb: Firestore | null = null;
 let cachedStorage: Storage | null = null;
 
+function stripWrappingQuotes(value: string): string {
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function normalizeAdminPrivateKey(rawValue: string): string {
+  const unquoted = stripWrappingQuotes(rawValue);
+
+  // Support common deployment formats:
+  // 1) JSON-style escaped newlines (\n)
+  // 2) Escaped carriage returns (\r)
+  // 3) Windows newlines (\r\n)
+  return unquoted
+    .replace(/\\n/g, "\n")
+    .replace(/\\r/g, "\r")
+    .replace(/\r\n/g, "\n");
+}
+
+function sanitizeEnvValue(rawValue: string): string {
+  return stripWrappingQuotes(rawValue);
+}
+
 function getServiceAccountFromEnv(): ServiceAccount {
   const rawKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY!;
-  const parsedKey = rawKey.replace(/\\n/g, "\n");
-
-  // ── Debug: log key shape (remove after fixing deployment) ──
-  console.log("[firebase-admin] Private key diagnostics:", {
-    rawKeyLen: rawKey.length,
-    parsedKeyLen: parsedKey.length,
-    startsCorrectly: parsedKey.trimStart().startsWith("-----BEGIN PRIVATE KEY-----"),
-    endsCorrectly: parsedKey.trimEnd().endsWith("-----END PRIVATE KEY-----"),
-    firstChars: rawKey.slice(0, 40),
-    lastChars: rawKey.slice(-40),
-    newlineCount: (parsedKey.match(/\n/g) || []).length,
-  });
+  const rawProjectId = process.env.FIREBASE_ADMIN_PROJECT_ID!;
+  const rawClientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL!;
+  const parsedKey = normalizeAdminPrivateKey(rawKey);
 
   return {
-    projectId: process.env.FIREBASE_ADMIN_PROJECT_ID!,
-    clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL!,
+    projectId: sanitizeEnvValue(rawProjectId),
+    clientEmail: sanitizeEnvValue(rawClientEmail),
     privateKey: parsedKey,
   };
 }

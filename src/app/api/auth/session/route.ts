@@ -1,34 +1,44 @@
 import { cookies } from "next/headers";
 import { createSessionCookie } from "@/lib/session";
 
-// ── Debug helpers (remove after fixing deployment) ─────────────────────────────
-function diagAdminEnv() {
-  const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID;
-  const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
-  const rawKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY;
+function sanitizeEnvValue(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
 
-  const keyPresent = !!rawKey && rawKey.length > 0;
-  const keyLen = rawKey?.length ?? 0;
+function getFirebaseErrorCode(error: unknown): string {
+  if (!error || typeof error !== "object") return "";
 
-  // Check if the key starts & ends with the expected PEM markers
-  const trimmed = rawKey?.trim() ?? "";
-  const startsOk = trimmed.startsWith("-----BEGIN PRIVATE KEY-----");
-  // After .replace(/\\n/g, "\n") the key should end with the marker
-  const normalised = trimmed.replace(/\\n/g, "\n");
-  const endsOk = normalised.trimEnd().endsWith("-----END PRIVATE KEY-----");
+  const byCode = "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
+  if (byCode) return byCode;
 
-  // Check for double-escaping: literal \\n (four chars) still present after one replace pass?
-  const hasDoubleEscape = normalised.includes("\\n");
+  const info = "errorInfo" in error ? (error as { errorInfo?: unknown }).errorInfo : undefined;
+  if (info && typeof info === "object" && "code" in info) {
+    return String((info as { code?: unknown }).code ?? "");
+  }
 
-  return {
-    projectId: projectId ?? "(not set)",
-    clientEmail: clientEmail ? `${clientEmail.slice(0, 12)}...` : "(not set)",
-    keyPresent,
-    keyLen,
-    startsOk,
-    endsOk,
-    hasDoubleEscape,
-  };
+  return "";
+}
+
+function isAdminConfigError(error: unknown): boolean {
+  const code = getFirebaseErrorCode(error).toLowerCase();
+  const message =
+    error instanceof Error ? error.message.toLowerCase() : String(error ?? "").toLowerCase();
+
+  return (
+    code.includes("invalid-credential") ||
+    code.includes("app/invalid-credential") ||
+    message.includes("private key") ||
+    message.includes("service account") ||
+    message.includes("credential")
+  );
 }
 
 type DecodedTokenPayload = {
@@ -69,16 +79,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const adminProjectId = process.env.FIREBASE_ADMIN_PROJECT_ID;
+    const adminProjectId = sanitizeEnvValue(process.env.FIREBASE_ADMIN_PROJECT_ID);
     const decoded = decodeTokenPayload(idToken);
 
-    // ── Debug: log diagnostics on every request (remove after fix) ──
-    const diag = diagAdminEnv();
-    console.log("[session] Admin env diagnostics:", JSON.stringify(diag));
-    console.log("[session] Token aud:", decoded?.aud, "| Admin project:", adminProjectId);
-
     if (decoded?.aud && adminProjectId && decoded.aud !== adminProjectId) {
-      console.error("[session] PROJECT MISMATCH:", { tokenAud: decoded.aud, adminProjectId });
       return Response.json(
         {
           code: "PROJECT_MISMATCH",
@@ -108,23 +112,26 @@ export async function POST(request: Request) {
 
     return Response.json({ status: "success" }, { status: 200 });
   } catch (error) {
-    // ── Enhanced debug logging (remove after fixing deployment) ──────
     const detail = error instanceof Error ? error.message : "Unknown error";
-    const errorCode =
-      error && typeof error === "object" && "code" in error
-        ? (error as { code?: string }).code
-        : undefined;
-    const errorInfo =
-      error && typeof error === "object" && "errorInfo" in error
-        ? (error as { errorInfo?: unknown }).errorInfo
-        : undefined;
+    const firebaseCode = getFirebaseErrorCode(error);
 
-    console.error("[session] ❌ createSessionCookie FAILED");
-    console.error("[session]   message:", detail);
-    console.error("[session]   code:", errorCode ?? "(none)");
-    console.error("[session]   errorInfo:", JSON.stringify(errorInfo ?? null));
-    console.error("[session]   env diag:", JSON.stringify(diagAdminEnv()));
-    console.error("[session]   full error:", error);
+    console.error("Failed to create session:", {
+      message: detail,
+      firebaseCode: firebaseCode || undefined,
+    });
+
+    if (isAdminConfigError(error)) {
+      return Response.json(
+        {
+          code: "ADMIN_SDK_CONFIG_ERROR",
+          error: "Server auth configuration error",
+          hint:
+            "Check FIREBASE_ADMIN_PROJECT_ID, FIREBASE_ADMIN_CLIENT_EMAIL, and FIREBASE_ADMIN_PRIVATE_KEY in deployment environment variables. Ensure private key formatting preserves line breaks.",
+          detail: process.env.NODE_ENV === "development" ? detail : undefined,
+        },
+        { status: 500 }
+      );
+    }
 
     return Response.json(
       {
@@ -132,9 +139,7 @@ export async function POST(request: Request) {
         error: "Unauthorized – invalid ID token",
         hint:
           "Verify Firebase Admin credentials and project IDs in deployment environment variables.",
-        // Show detail in ALL environments temporarily for debugging
-        detail,
-        debugDiag: diagAdminEnv(),
+        detail: process.env.NODE_ENV === "development" ? detail : undefined,
       },
       { status: 401 }
     );
