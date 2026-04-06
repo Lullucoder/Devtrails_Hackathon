@@ -4,6 +4,7 @@ import React, { useEffect, useRef, createContext, useContext, useState, useCallb
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, FileText, History, UserCircle } from "lucide-react";
+import { NotificationBell } from "@/components/worker/NotificationBell";
 
 // ─ Theme context — consumed by profile page to render toggle ─────────────────
 type WorkerTheme = "light" | "dark";
@@ -71,6 +72,19 @@ export default function WorkerLayout({ children }: { children: React.ReactNode }
         suppressHydrationWarning
         className="worker-portal min-h-screen bg-background flex flex-col"
       >
+        {/* Top Header with Notification Bell */}
+        <header className="sticky top-0 z-40 glass border-b border-border">
+          <div className="max-w-lg mx-auto flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
+                <span className="text-white text-sm font-bold">W</span>
+              </div>
+              <span className="text-sm font-semibold">Worker Portal</span>
+            </div>
+            <NotificationBell />
+          </div>
+        </header>
+
         <main className="flex-1 pb-24 max-w-lg mx-auto w-full">{children}</main>
 
         {/* Bottom Navigation — 56px tap targets for gloves/wet hands */}

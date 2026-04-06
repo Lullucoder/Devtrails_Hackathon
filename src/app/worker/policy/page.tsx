@@ -1,198 +1,107 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { CheckCircle, Shield, Zap, ArrowRight, Loader2 } from "lucide-react";
-import toast from "react-hot-toast";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { createPolicy, getActivePolicyByWorker } from "@/lib/firestore";
-import type { PremiumQuote } from "@/lib/premiumEngine";
-
-const plans = [
-  {
-    id: "lite",
-    name: "Lite",
-    defaultPrice: 29,
-    defaultProtection: 800,
-    ideal: "Part-time riders",
-    features: ["All 5 triggers", "Up to ₹800/week", "Standard payout speed", "Basic trust rewards"],
-  },
-  {
-    id: "core",
-    name: "Core",
-    defaultPrice: 49,
-    defaultProtection: 1500,
-    ideal: "Regular riders",
-    popular: true,
-    features: ["All 5 triggers", "Up to ₹1,500/week", "Instant payout", "Trust discount eligible", "Priority support"],
-  },
-  {
-    id: "peak",
-    name: "Peak",
-    defaultPrice: 79,
-    defaultProtection: 2500,
-    ideal: "Full-time riders",
-    features: ["All 5 triggers", "Up to ₹2,500/week", "Instant payout", "Maximum trust rewards", "Priority support", "Multi-zone cover"],
-  },
-];
-
-const FALLBACK_PLAN_VALUES: Record<string, { premiumInr: number; maxWeeklyProtectionInr: number }> = {
-  lite: { premiumInr: 29, maxWeeklyProtectionInr: 800 },
-  core: { premiumInr: 49, maxWeeklyProtectionInr: 1500 },
-  peak: { premiumInr: 79, maxWeeklyProtectionInr: 2500 },
-};
-
-function formatDate(input: unknown): string {
-  if (!input) return "—";
-  if (typeof input === "string") {
-    return new Date(input).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-  }
-  if (typeof input === "object" && input !== null && "seconds" in input) {
-    return new Date((input as { seconds: number }).seconds * 1000).toLocaleDateString("en-IN", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
-  }
-  return "—";
-}
+import { doc, serverTimestamp } from "firebase/firestore";
+import { Loader2, Sparkles, CheckCircle, Shield } from "lucide-react";
+import toast from "react-hot-toast";
 
 export default function PolicyPage() {
-  const router = useRouter();
   const { user, userProfile } = useAuth();
-  const [activePlan, setActivePlan] = useState<string | null>(null);
-  const [activePlanExpiry, setActivePlanExpiry] = useState<string>("—");
-  const [quote, setQuote] = useState<PremiumQuote | null>(null);
-  const [loadingQuote, setLoadingQuote] = useState(true);
-  const [buying, setBuying] = useState(false);
-  const [buyingPlanId, setBuyingPlanId] = useState<string | null>(null);
+  const router = useRouter();
+  const [activePolicy, setActivePolicy] = useState(null);
+  const [checkingPolicy, setCheckingPolicy] = useState(true);
+  const [premiumData, setPremiumData] = useState(null);
+  const [premiumLoading, setPremiumLoading] = useState(true);
+  const [buying, setBuying] = useState<string | null>(null);
 
   useEffect(() => {
-    const loadPolicyAndQuote = async () => {
-      if (!user) {
-        setLoadingQuote(false);
-        return;
-      }
-
-      try {
-        const existingPolicy = await getActivePolicyByWorker(user.uid);
-        if (existingPolicy) {
-          setActivePlan(existingPolicy.plan);
-          setActivePlanExpiry(formatDate(existingPolicy.weekEnd));
-        } else {
-          setActivePlan(null);
-          setActivePlanExpiry("—");
-        }
-      } catch (error) {
-        console.error("Failed to load active policy:", error);
-      }
-
-      try {
-        const token = await user.getIdToken();
-        const response = await fetch("/api/claims/premium-quote", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`Premium quote API returned ${response.status}`);
-        }
-
-        const data = (await response.json()) as PremiumQuote;
-        setQuote(data);
-      } catch (error) {
-        console.error("Failed to fetch premium quote:", error);
-        toast.error("Using default pricing while quote service is unavailable.");
-      } finally {
-        setLoadingQuote(false);
-      }
-    };
-
-    void loadPolicyAndQuote();
+    if (!user) return;
+    getActivePolicyByWorker(user.uid)
+      .then(setActivePolicy)
+      .catch(console.error)
+      .finally(() => setCheckingPolicy(false));
   }, [user]);
 
-  const planValues = useMemo(() => {
-    if (!quote) {
-      return FALLBACK_PLAN_VALUES;
+  useEffect(() => {
+    if (!userProfile) {
+      setPremiumLoading(false);
+      return;
     }
+    fetch("/api/claims/premium-quote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        city: userProfile.city ?? "Bengaluru",
+        zone: userProfile.zone ?? "Koramangala",
+        shiftStartTime: userProfile.workingHours ?? "9 AM",
+        shiftDuration: "8",
+        weeklyEarningRange: userProfile.weeklyEarningRange ?? "₹5,000–₹7,000",
+        trustScore: userProfile.trustScore ?? 0.8,
+      })
+    })
+    .then(r => r.json())
+    .then(setPremiumData)
+    .catch(console.error)
+    .finally(() => setPremiumLoading(false));
+  }, [userProfile]);
 
-    return {
-      lite: {
-        premiumInr: quote.plans.lite.weekly_premium,
-        maxWeeklyProtectionInr: quote.plans.lite.max_weekly_protection,
-      },
-      core: {
-        premiumInr: quote.plans.standard.weekly_premium,
-        maxWeeklyProtectionInr: quote.plans.standard.max_weekly_protection,
-      },
-      peak: {
-        premiumInr: quote.plans.premium.weekly_premium,
-        maxWeeklyProtectionInr: quote.plans.premium.max_weekly_protection,
-      },
-    };
-  }, [quote]);
-
-  const handleBuy = async (planId: string) => {
-    // a. Guard checks
+  const handleBuy = async (plan: "Lite" | "Standard" | "Premium") => {
     if (!user || !userProfile) {
       toast.error("Please log in first");
       return;
     }
     if (!userProfile.upiId) {
-      toast.error("Please complete your profile with a UPI ID first");
+      toast.error("Please add your UPI ID in your profile first");
       return;
     }
-
-    // b. Set loading state
-    setBuying(true);
-    setBuyingPlanId(planId);
-
+    if (activePolicy) {
+      toast.error("You already have an active policy this week");
+      return;
+    }
+ 
+    setBuying(plan);
     try {
-      // c. Check for existing active policy
-      const existingPolicy = await getActivePolicyByWorker(user.uid);
-      if (existingPolicy) {
-        toast.error("You already have an active policy this week");
-        setBuying(false);
-        setBuyingPlanId(null);
-        return;
-      }
-
-      // d. Compute coverage dates (week start = now, week end = +7 days)
-      const weekStartDate = new Date();
-      const weekEndDate = new Date();
-      weekEndDate.setDate(weekEndDate.getDate() + 7);
-
-      // e. Map plan id to PlanTier (lowercase) and look up values
-      const planName = planId.toLowerCase() as "lite" | "core" | "peak";
-      const selectedPlanValues = planValues[planName];
-
-      // f. Create the policy document in Firestore (field names match the Policy type)
+      const planValues = {
+        Lite:     { premiumInr: premiumData?.premium_inr ? premiumData.premium_inr - 20 : 19, maxWeeklyProtectionInr: 800 },
+        Standard: { premiumInr: premiumData?.premium_inr ?? 39, maxWeeklyProtectionInr: 1500 },
+        Premium:  { premiumInr: premiumData?.premium_inr ? premiumData.premium_inr + 30 : 79, maxWeeklyProtectionInr: 2500 },
+      };
+         
+      const values = planValues[plan];
+      const coverageEnd = new Date();
+      coverageEnd.setDate(coverageEnd.getDate() + 7);
+ 
       await createPolicy({
-        workerId:      user.uid,
-        plan:          planName,
-        premium:       selectedPlanValues.premiumInr,
-        maxProtection: selectedPlanValues.maxWeeklyProtectionInr,
-        weekStart:     weekStartDate.toISOString(),
-        weekEnd:       weekEndDate.toISOString(),
-        status:        "active",
-        triggers:      ["heavy_rain", "extreme_heat", "hazardous_aqi", "zone_closure", "platform_outage"],
+        workerId: user.uid,
+        workerName: userProfile.name ?? "Worker",
+        plan,
+        premiumInr: values.premiumInr,
+        maxWeeklyProtectionInr: values.maxWeeklyProtectionInr,
+        coverageStart: new Date().toISOString(),
+        coverageEnd: coverageEnd.toISOString(),
+        status: "active",
+        zone: userProfile.zone ?? "",
+        city: userProfile.city ?? "",
+        triggersWatched: [
+          "heavy_rain","extreme_heat","hazardous_aqi",
+          "zone_closure","platform_outage"
+        ],
+        premiumBreakdown: premiumData?.breakdown ?? null,
+        aiPriced: premiumData?.model_used === "xgboost",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
-
-      // g. Success
-      toast.success("Policy activated! You are protected this week.");
+ 
+      toast.success(`${plan} plan activated! You are protected this week.`);
       router.push("/worker/dashboard");
     } catch (error) {
-      // h. Error
-      toast.error("Failed to activate policy. Please try again.");
       console.error(error);
+      toast.error("Failed to activate policy. Please try again.");
     } finally {
-      // i. Reset loading
-      setBuying(false);
-      setBuyingPlanId(null);
+      setBuying(null);
     }
   };
 
@@ -203,102 +112,165 @@ export default function PolicyPage() {
       </h1>
       <p className="text-sm text-muted-foreground mb-6">Choose your income protection level</p>
 
-      {/* Current Plan */}
-      <div className="glass rounded-2xl p-4 mb-6 flex items-center gap-3 border border-[rgba(108,92,231,0.3)]">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#6c5ce7] to-[#a855f7] flex items-center justify-center">
-          <Shield className="w-5 h-5 text-white" />
-        </div>
-        <div>
-          <p className="text-sm font-semibold">
-            Current:{" "}
-            <span className="gradient-text">
-              {activePlan ? `${activePlan.charAt(0).toUpperCase()}${activePlan.slice(1)} Plan` : "No active plan"}
+      {checkingPolicy ? (
+        <div className="glass rounded-2xl p-5 mb-6 animate-pulse h-20" />
+      ) : activePolicy ? (
+        <div className="glass rounded-2xl p-5 mb-6 border border-green-500/30">
+          <div className="flex items-center gap-3 mb-3">
+            <CheckCircle className="w-6 h-6 text-green-500" />
+            <div>
+              <p className="font-bold text-sm">Active Policy</p>
+              <p className="text-xs text-muted-foreground">
+                {activePolicy.plan} Plan — valid until{" "}
+                {new Date(activePolicy.coverageEnd).toLocaleDateString("en-IN")}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Max protection</span>
+            <span className="font-bold text-accent">
+              ₹{activePolicy.maxWeeklyProtectionInr?.toLocaleString("en-IN")}
             </span>
+          </div>
+          <div className="flex items-center justify-between text-sm mt-1">
+            <span className="text-muted-foreground">Premium paid</span>
+            <span className="font-semibold">₹{activePolicy.premiumInr}</span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-3 text-center">
+            You can renew your policy after it expires
           </p>
-          <p className="text-xs text-muted-foreground">
-            {activePlan ? `Active until ${activePlanExpiry}` : "Buy a weekly plan to activate protection"}
-          </p>
-          {quote && (
-            <p className="text-[10px] text-muted-foreground mt-1">
-              Pricing source: {quote.model_used === "ml_model" ? "AI quote" : "Fallback quote"}
-            </p>
-          )}
         </div>
-      </div>
+      ) : (
+        <>
+          {premiumLoading ? (
+            <div className="glass rounded-2xl p-4 mb-5 animate-pulse h-20" />
+          ) : premiumData ? (
+            <div className="glass rounded-2xl p-4 mb-5"
+              style={{ border: "1px solid rgba(139,92,246,0.3)" }}>
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles className="w-4 h-4 text-primary" />
+                <span className="text-xs font-semibold text-primary">
+                  AI-Powered Pricing for You
+                </span>
+                <span className="text-[10px] text-muted-foreground ml-auto">
+                  {premiumData.model_used === "xgboost"
+                     ? "XGBoost model" : "Standard pricing"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                  premiumData.risk_tier === "Low"
+                     ? "bg-green-500/10 text-green-600"
+                    : premiumData.risk_tier === "High"
+                    ? "bg-red-500/10 text-red-600"
+                      : "bg-amber-500/10 text-amber-600"
+                }`}>
+                  {premiumData.risk_tier} Risk Zone
+                </span>
+              </div>
+              <div className="space-y-1">
+                {premiumData.top_reasons?.map((reason: string, i: number) => (
+                  <p key={i} className="text-[11px] text-muted-foreground">
+                    • {reason}
+                  </p>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
-      {/* Plans */}
-      <div className="space-y-4">
-        {plans.map((plan, i) => (
-          <motion.div
-            key={plan.id}
-            className={`glass rounded-2xl p-5 relative ${
-              plan.popular ? "gradient-border" : ""
-            } ${activePlan === plan.id ? "ring-1 ring-primary" : ""}`}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1 }}
+          {[
+            {
+             plan: "Lite" as const,
+             price: premiumData?.premium_inr
+               ? premiumData.premium_inr - 20 : 19,
+            protection: 800,
+            ideal: "Part-time riders",
+            features: ["Rain & heat coverage","Basic fraud protection","Email support"]
+          },
+          {
+             plan: "Standard" as const,
+            price: premiumData?.premium_inr ?? 39,
+            protection: 1500,
+            ideal: "Regular riders",
+            recommended: true,
+            features: ["All 5 trigger types","AI fraud detection","Priority support","Instant payout"]
+          },
+          {
+             plan: "Premium" as const,
+            price: premiumData?.premium_inr
+               ? premiumData.premium_inr + 30 : 79,
+            protection: 2500,
+            ideal: "Full-time riders",
+            features: ["All 5 trigger types","Advanced fraud AI","24/7 support","Instant payout","Trust score boost"]
+          },
+        ].map((item) => (
+          <div
+            key={item.plan}
+            className="glass rounded-2xl p-5 mb-4"
+            style={item.recommended ? {
+               border: "2px solid rgba(139,92,246,0.6)"
+             } : {}}
           >
-            {plan.popular && (
-              <div className="absolute -top-2.5 right-4 px-3 py-0.5 rounded-full bg-gradient-to-r from-[#6c5ce7] to-[#a855f7] text-[10px] font-bold text-white">
-                POPULAR
+            {item.recommended && (
+              <div className="flex items-center gap-1 mb-3">
+                <Sparkles className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-bold text-primary">
+                  Recommended by AI
+                </span>
               </div>
             )}
             <div className="flex items-start justify-between mb-3">
               <div>
-                <h3 className="text-lg font-bold" style={{ fontFamily: "var(--font-outfit)" }}>
-                  {plan.name}
-                </h3>
-                <p className="text-xs text-muted-foreground">{plan.ideal}</p>
+                <p className="font-bold text-base">{item.plan} Plan</p>
+                <p className="text-xs text-muted-foreground">{item.ideal}</p>
               </div>
               <div className="text-right">
-                <p className="text-xl font-bold gradient-text">₹{planValues[plan.id].premiumInr}</p>
-                <p className="text-[10px] text-muted-foreground">/week</p>
-                <p className="text-[10px] text-muted-foreground">
-                  Cover ₹{planValues[plan.id].maxWeeklyProtectionInr}
-                </p>
+                <p className="text-2xl font-bold">₹{item.price}</p>
+                <p className="text-[10px] text-muted-foreground">per week</p>
               </div>
             </div>
-
-            <div className="space-y-2 mb-4">
-              {plan.features.map((f) => (
-                <div key={f} className="flex items-center gap-2 text-sm text-secondary-foreground">
-                  <CheckCircle className="w-3.5 h-3.5 text-accent flex-shrink-0" />
-                  <span>{f}</span>
+            <div className="flex items-center justify-between mb-4 py-2 px-3 rounded-xl bg-muted/40">
+              <span className="text-xs text-muted-foreground">Max protection</span>
+              <span className="text-sm font-bold text-accent">
+                ₹{item.protection.toLocaleString("en-IN")}
+              </span>
+            </div>
+            <div className="space-y-1.5 mb-4">
+              {item.features.map(f => (
+                <div key={f} className="flex items-center gap-2">
+                  <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                  <span className="text-xs text-muted-foreground">{f}</span>
                 </div>
               ))}
             </div>
-
             <button
-              onClick={() => handleBuy(plan.id)}
-              disabled={buying || loadingQuote}
-              className={`w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all ${
-                activePlan === plan.id
-                  ? "bg-muted border border-border text-muted-foreground cursor-default"
-                  : "bg-gradient-to-r from-[#6c5ce7] to-[#a855f7] text-white hover:opacity-90"
+              onClick={() => handleBuy(item.plan)}
+              disabled={buying !== null}
+              style={{
+                 minHeight: "48px",
+                background: item.recommended
+                   ? "linear-gradient(135deg, #6c5ce7, #a855f7)"
+                  : undefined
+              }}
+              className={`w-full rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-opacity disabled:opacity-50 ${
+                item.recommended
+                  ? "text-white hover:opacity-90"
+                  : "border border-border text-foreground hover:bg-muted"
               }`}
             >
-              {loadingQuote ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Loading quote...
-                </>
-              ) : buying && buyingPlanId === plan.id ? (
+              {buying === item.plan ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
                   Activating...
                 </>
-              ) : activePlan === plan.id ? (
-                "Current Plan"
               ) : (
-                <>
-                  Get {plan.name}
-                  <ArrowRight className="w-4 h-4" />
-                </>
+                `Activate ${item.plan} — ₹${item.price}/week`
               )}
             </button>
-          </motion.div>
+          </div>
         ))}
-      </div>
+        </>
+      )}
     </div>
   );
 }

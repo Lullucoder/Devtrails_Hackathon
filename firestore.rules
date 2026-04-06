@@ -63,13 +63,14 @@ service cloud.firestore {
     }
 
     // ── claims ────────────────────────────────────────────────────────────
-    // Workers can read their own claims but CANNOT create or update.
-    // Claims are created by the system (server-side / Cloud Functions).
+    // Workers can read their own claims and create new ones.
+    // Claims are created by workers (manual filing) or system (auto-triggered).
     // Admins can read all and update status.
     match /claims/{claimId} {
       allow read:    if isAuthenticated()
                      && (isAdmin() || resource.data.workerId == request.auth.uid);
-      allow create:  if isAdmin();
+      allow create:  if isAuthenticated()
+                     && request.resource.data.workerId == request.auth.uid;
       allow update:  if isAdmin();
       allow delete:  if false;
     }

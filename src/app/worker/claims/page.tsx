@@ -68,6 +68,96 @@ const statusConfig: Record<string, { label: string; class: string }> = {
 /** Claims that offer the face re-verification boost */
 const BOOSTABLE_STATUSES = new Set(["soft_review", "held", "under_review", "pending_fraud_check"]);
 
+const CLAIM_STEPS = [
+  { key: "initiated",           label: "Trigger Detected" },
+  { key: "pending_fraud_check", label: "Fraud Check"      },
+  { key: "soft_review",         label: "Under Review"     },
+  { key: "auto_approved",       label: "Approved"         },
+  { key: "payout_initiated",    label: "Payout Sent"      },
+  { key: "paid",                label: "Credited"         },
+];
+
+function getStepIndex(status: string): number {
+  const map: Record<string, number> = {
+    initiated: 0,
+    pending_fraud_check: 1,
+    soft_review: 2,
+    under_review: 2,
+    held: 2,
+    auto_approved: 3,
+    approved: 3,
+    payout_initiated: 4,
+    paid: 5,
+    denied: 2,
+    rejected: 2,
+  };
+  return map[status] ?? 0;
+}
+
+function ClaimTimeline({ status }: { status: string }) {
+  const currentStep = getStepIndex(status);
+  const isDenied = status === "denied" || status === "rejected";
+ 
+  return (
+    <div className="mt-3 pt-3 border-t border-border">
+      <p className="text-[10px] text-muted-foreground mb-2 font-medium">
+        Claim Journey
+      </p>
+      <div className="flex items-center gap-0">
+        {CLAIM_STEPS.map((step, i) => {
+          const isCompleted = i < currentStep;
+          const isCurrent = i === currentStep;
+          const isLast = i === CLAIM_STEPS.length - 1;
+ 
+          return (
+            <React.Fragment key={step.key}>
+              <div className="flex flex-col items-center">
+                <div
+                  className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${
+                    isDenied && isCurrent
+                      ? "bg-red-500"
+                      : isCompleted
+                      ? "bg-green-500"
+                      : isCurrent
+                      ? "bg-primary"
+                      : "bg-muted border border-border"
+                  }`}
+                >
+                  {isCompleted ? (
+                    <svg className="w-3 h-3 text-white" fill="none"
+                       viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round"
+                         strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : isCurrent ? (
+                    <div className={`w-2 h-2 rounded-full ${
+                      isDenied ? "bg-white" : "bg-white animate-pulse"
+                    }`} />
+                  ) : null}
+                </div>
+                <p className={`text-[8px] mt-1 text-center leading-tight max-w-[40px] ${
+                  isCompleted || isCurrent
+                     ? "text-foreground font-medium"
+                     : "text-muted-foreground"
+                }`}>
+                  {step.label}
+                </p>
+              </div>
+              {!isLast && (
+                <div
+                  className={`flex-1 h-0.5 mb-3 transition-all ${
+                    i < currentStep ? "bg-green-500" : "bg-muted"
+                  }`}
+                />
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function toDate(input: unknown): Date | null {
   if (!input) return null;
   if (typeof input === "string") return new Date(input);
@@ -396,6 +486,7 @@ export default function ClaimsPage() {
                         </span>
                       )}
                     </div>
+                    <ClaimTimeline status={claim.status} />
                   </div>
                 </div>
 
