@@ -12,7 +12,12 @@ import {
   FileText,
   ScanFace,
   ChevronRight,
+  Plus,
+  Loader2,
 } from "lucide-react";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { getActivePolicyByWorker } from "@/lib/firestore";
 import FaceReverificationModal from "@/components/FaceReverificationModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { getClaimsByWorker } from "@/lib/firestore";
@@ -47,39 +52,6 @@ const typeLabel: Record<string, string> = {
 };
 
 // Demo claims — Track A is auto_approved, B/C use soft_review / held
-const claims = [
-  {
-    id: "cl_001",
-    triggerType: "heavy_rain",
-    status: "auto_approved",
-    confidenceScore: 0.92,
-    payoutAmount: 750,
-    createdAt: "2026-03-18T20:15:00",
-    description: "Severe rainfall in Koramangala zone. 6-hour work window lost.",
-  },
-  {
-    id: "cl_004",
-    triggerType: "platform_outage",
-    /** Track B — soft review */
-    status: "soft_review",
-    confidenceScore: 0.58,
-    payoutAmount: 500,
-    createdAt: "2026-03-19T21:45:00",
-    description:
-      "Platform outage during peak evening hours. 3.5 hours lost. Under soft review.",
-  },
-  {
-    id: "cl_003",
-    triggerType: "hazardous_aqi",
-    /** Track C — held */
-    status: "held",
-    confidenceScore: 0.35,
-    payoutAmount: 900,
-    createdAt: "2026-03-15T23:30:00",
-    description:
-      "Hazardous AQI in your zone. Full-day income disruption. Held for investigation.",
-  },
-];
 
 const statusConfig: Record<string, { label: string; class: string }> = {
   auto_approved: { label: "Auto Approved", class: "status-approved" },
@@ -114,6 +86,10 @@ export default function ClaimsPage() {
 
   const [claims, setClaims] = useState<Claim[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filing, setFiling] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [selectedTrigger, setSelectedTrigger] = useState("heavy_rain");
+  const [selectedSeverity, setSelectedSeverity] = useState("moderate");
 
   const [modalOpen, setModalOpen] = useState(false);
   const [activeClaim, setActiveClaim] = useState<Claim | null>(null);
@@ -145,6 +121,63 @@ export default function ClaimsPage() {
   }, [user]);
 
   const totalReceived = claims.reduce((sum, claim) => sum + (claim.payoutAmount || 0), 0);
+
+  const handleFileClaim = async () => {
+    if (!user) {
+      toast.error("Please log in first");
+      return;
+    }
+
+    setFiling(true);
+    try {
+      const activePolicy = await getActivePolicyByWorker(user.uid);
+      if (!activePolicy) {
+        toast.error("You need an active policy to file a claim. Go to Policy page first.");
+        setFiling(false);
+        return;
+      }
+
+      const payoutMap: Record<string, Record<string, number>> = {
+        moderate: { heavy_rain: 200, extreme_heat: 200, hazardous_aqi: 200, zone_closure: 200, platform_outage: 200 },
+        high:     { heavy_rain: 400, extreme_heat: 400, hazardous_aqi: 400, zone_closure: 400, platform_outage: 400 },
+        severe:   { heavy_rain: 800, extreme_heat: 800, hazardous_aqi: 800, zone_closure: 800, platform_outage: 800 },
+      };
+
+      const payout = payoutMap[selectedSeverity]?.[selectedTrigger] ?? 200;
+
+      await addDoc(collection(db, "claims"), {
+        workerId: user.uid,
+        workerName: user.displayName ?? "Worker",
+        policyId: activePolicy.id,
+        triggerType: selectedTrigger,
+        triggerSeverity: selectedSeverity,
+        status: "pending_fraud_check",
+        confidenceScore: 0.72,
+        payoutAmount: payout,
+        zone: user.displayName ?? "Worker zone",
+        description: `Manual claim filed for ${typeLabel[selectedTrigger]} — ${selectedSeverity} severity.`,
+        autoInitiated: false,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      toast.success("Claim filed successfully! It is being verified.");
+      setShowForm(false);
+
+      // Reload claims
+      const updated = await getClaimsByWorker(user.uid);
+      setClaims([...updated].sort((a, b) => {
+        const aTime = toDate(a.createdAt)?.getTime() ?? 0;
+        const bTime = toDate(b.createdAt)?.getTime() ?? 0;
+        return bTime - aTime;
+      }));
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to file claim. Please try again.");
+    } finally {
+      setFiling(false);
+    }
+  };
 
   const openModal = (claim: Claim) => {
     setActiveClaim(claim);
@@ -182,6 +215,97 @@ export default function ClaimsPage() {
               <p className="text-2xl font-bold text-accent">{totalReceived}</p>
             </div>
           </div>
+        </div>
+
+        {/* File a Claim Button */}
+        <div className="mb-4">
+          {!showForm ? (
+            <button
+              onClick={() => setShowForm(true)}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm text-white transition-opacity hover:opacity-90"
+              style={{ background: "linear-gradient(135deg, #6c5ce7, #a855f7)" }}
+            >
+              <Plus className="w-4 h-4" />
+              File a Claim
+            </button>
+          ) : (
+            <div className="glass rounded-2xl p-4 space-y-4">
+              <p className="font-semibold text-sm">New Claim</p>
+              
+              {/* Trigger type */}
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">What disrupted your work?</p>
+                <div className="grid grid-cols-1 gap-2">
+                  {Object.entries(typeLabel).map(([key, label]) => (
+                    <button
+                      key={key}
+                      onClick={() => setSelectedTrigger(key)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all border ${
+                        selectedTrigger === key
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border text-muted-foreground"
+                      }`}
+                    >
+                      {React.createElement(iconMap[key] || FileText, {
+                        className: "w-4 h-4"
+                      })}
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Severity */}
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">Severity</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {["moderate", "high", "severe"].map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setSelectedSeverity(s)}
+                      className={`py-2 rounded-xl text-xs font-semibold capitalize border transition-all ${
+                        selectedSeverity === s
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border text-muted-foreground"
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Expected payout preview */}
+              <div className="flex items-center justify-between py-2 px-3 rounded-xl bg-muted/50">
+                <span className="text-xs text-muted-foreground">Expected payout</span>
+                <span className="text-sm font-bold text-accent">
+                  ₹{selectedSeverity === "moderate" ? 200 : selectedSeverity === "high" ? 400 : 800}
+                </span>
+              </div>
+
+              {/* Action buttons */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setShowForm(false)}
+                  className="py-2.5 rounded-xl text-sm font-medium border border-border text-muted-foreground"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleFileClaim}
+                  disabled={filing}
+                  className="py-2.5 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 disabled:opacity-50"
+                  style={{ background: "linear-gradient(135deg, #6c5ce7, #a855f7)" }}
+                >
+                  {filing ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Submit Claim"
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Claims List */}
